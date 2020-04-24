@@ -1,7 +1,7 @@
 # MiSTER-SuperJacob
 My SuperJacob core ported to MiSTER
 
-This is a port of a computer I designed while learning to program FPGAs.  Apologies for the state of the code, this was a learning experiment and started off with me just wanted to generate a VGA output.  Then I started playing and adding bits until it developed into a working and usable computer.  Because of this, there is no consistency is the code or the general structure and I was learning new ways of doing things all the time.
+This is a port of a computer I designed while learning to program FPGAs.  Apologies for the state of the code, this was a learning experiment and started off with me just wanted to generate a VGA output.  Then I started playing and adding bits until it developed into a working and usable computer.  Because of this, there is no consistency to the code or the general structure as I was learning new ways of doing things all the time.
 
 Most things have ported across ok, however the main issue I have is that I cannot get the SDRAM interface working so I'm limited to 256k of memory (using internal RAM) whereas the original used 512K.  There is also a small bug with the SD Card interface, sometimes it fails to initialise after a reset, but another reset usually fixes it.  This doesn't happen on real hardware so I'm not sure what is causing it.
 
