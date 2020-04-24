@@ -5,76 +5,127 @@ This is a port of a computer I designed while learning to program FPGAs.  Apolog
 
 Most things have ported across ok, however the main issue I have is that I cannot get the SDRAM interface working so I'm limited to 256k of memory (using internal RAM) whereas the original used 512K.  There is also a small bug with the SD Card interface, sometimes it fails to initialise after a reset, but another reset usually fixes it.  This doesn't happen on real hardware so I'm not sure what is causing it.
 
+
 The original core is based on a CMOD-A7 FPGA board which uses an Artix-7 15T.
+
 
 The machine
 
+
 Z80 CPU running at 12mhz (uses T80 core), with dedicated 512k (256k on current MiSTER port) memory, bankable in 8k slots.
 
+
 4 display modes
+
 80 column text
+
 320 x 240 256 colour bitmap mode (scrollable)
+
 512 x 512 scrollable tilemap mode - 320 x 240 visible - 256 colour (8 bit) tiles
+
 512 x 512 scrollable tilemap mode - 320 x 240 visible - 256 colour (4 bit) tiles with palette offset
 
+
 Each tilemap mode has 2 independantly scrollable tilemaps, background and foreground with the foreground being maskable.
+
 Foreground and background can be independantly disabled
 
+
 128k gfx memory so total of 2,048 8 bit tiles or 4,096 4 bit tiles
+
 Dedicated tilemap memory 2 x 8k
 
+
 128 hardware 16x16 sprites - can operate in either 8 bit or 4 bit mode with palette offset.
+
 Can display all 128 sprites on screen at once and approx 90 per scanline
+
 Hardware mirroring and linking.
+
 Can prioritise sprites either in front or behind a foreground tilemap
+
 Independant palette tables for background and foreground sprites
+
 16k dedicated sprite RAM - total of 64 8 bit or 128 4 bit sprite patterns.
+
 Sprite DMA can copy patterns and attribute data at directly from CPU RAM to Sprite RAM
 
+
 512 colours on screen at once selectable from a palette of 4,096
+
 12 bit colour (R4G4B4)
+
 Separate palettes for Tilemap and Sprites
+
 Separate selectable colour masks for foreground tilemap and sprites
+
 VGA output running at 60hz
 
+
 SID 8580 sound chip (core taken from MiSTer C64 port)
+
 4 x 8 bit PCM channels - selectable frequency 3.9khz, 7.9khz, 15.8khz, 31.5khz (driven off hblank)
+
 Samples share 128k gfx memory space
+
 
 2 x 16 bit timers - can run between .75hz and 50khz
 
+
 Maskable interrupts generated for vblank, hblank, defined raster line, keyboard, GPIOA, GPIOB, Timer 1 and Timer 2
+
 Button driven NMI (Not currently implemented in MiSTER port)
 
-2 programmable GPIO ports - physical MCP23017 via I2C - connect to 9 pin D-Sub joystick connector
+2 programmable GPIO ports - physical MCP23017 via I2C - connect to 9 pin D-Sub joystick connector.  
 GPIO address pulled down to zero but can be overridden via pin header (MiSTER Port just connects these to Joysticks 0 & 1)
+
 
 2 x analogue inputs (via pin header) - Not implemented in MiSTER port
 
+
 2 x user LED
+
 1 x user RGB LED  - Not implemented in MiSTER Port
+
 
 SD Card interface via SPI interface
 
 PS2 keyboard
 
 Rudimentary but functioning operating system, available OS commands are:
+
 DIR                    - List current directory
+
 CD <dir>                - Change directory
+
 BLOAD <file> <address>  - Binary Load a raw bin file into address
+
 SYS <address>           - Execute code at address
+
 CLS                     - Clear the screen
+
 DUMP <address>          - Dump the contents of address to screen
+
 BANK <bank> <val>       - Set memory bank (2 through 7) $4000 through $e000 to val (0 to 63) which is 1 of 64 8k banks withih the 512k
+
 JOYTEST                 - Run the internal joystick test program
+
 GETCHAR <x> <y>         - Get the character as location X Y
+
 LOAD <file.sj>          - Load .SJ file and run
+
 SETLED2 <R> <G> <B>     - Set the RGB LED value
+
 PAPER <byte>            - Set the background colour
+
 INK <byte>              - Set the foreground colour
+
 VOL <x:>                - Set the current SD volume to x - first volume is A so command would be VOL A:
+
 JOY0 <mode>             - Set joystick mode for joystick 0 - 1 = normal, 2 - 3 button megadrive controller
+
 JOY1 <mode>             - Set joystick mode for joystick 1 - 1 = normal, 2 - 3 button megadrive controller
+
 
 If anyone was interested in creating anything for it.  The IO port map as follows:
 Outputs
