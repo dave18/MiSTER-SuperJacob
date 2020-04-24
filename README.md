@@ -1,5 +1,5 @@
 # MiSTER-SuperJacob
-My SuperJacob core ported to MiSter
+My SuperJacob core ported to MiSTER
 
 This is a port of a computer I designed while learning to program FPGAs.  Apologies for the state of the code, this was a learning experiment and started off with me just wanted to generate a VGA output.  Then I started playing and adding bits until it developed into a working and usable computer.  Because of this, there is no consistency is the code or the general structure and I was learning new ways of doing things all the time.
 
