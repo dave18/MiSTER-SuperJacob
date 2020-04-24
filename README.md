@@ -80,39 +80,22 @@ If anyone was interested in creating anything for it.  The IO port map as follow
 Outputs
 
 Hex NAME            Description
-
 FF  **** Not used ****
-
 FE  INT_EN_FLAG     Interrupt enable flags  [TMR2,TMR1,KEYBOARD,GOPIOB,GPIOA,HSYNC,RASTERLINE,VSYNC]
-
 FD  INT_DATA_BUS    Value that will be presented to the data bus upon interrupt
-
 FC  VID_WRITE       Writes byte to current video address
-
 FB  VID_INC_ROW     Increases video address by 1 row (320 bytes)  (value written is irrelevant)
-
 FA  VID_INC         Increase video address by 1 byte  (value written is irrelevant)
-
 F9  VID_ADD_VAL     Increase video address by value written to port
-
 F8  VID_ADDR_HI     Set MSB of video address
-
 F7  VID_ADDR_MD     Set bits 15 through 8 of video address
-
 F6  VID_ADDR_LO     Set bits 7 through 0 of video address
-
 F5  VID_ZERO        Zero video address
-
 F4  **** Not used ****
-
 F3  **** Not used ****
-
 F2  **** Not used ****
-
 F1  RASTER_HI       Writes high 2 bits of raster line interrupt
-
 F0  RASTER_LO       Writes low byte of raster line interrupt
-
 
 EF  **** Not used ****
 EE  **** Not used ****
