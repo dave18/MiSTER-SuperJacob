@@ -58,8 +58,23 @@ SD Card interface via SPI interface
 
 PS2 keyboard
 
-Rudimentary but functioning operating system.
-
+Rudimentary but functioning operating system, available OS commands are:
+DIR                    - List current directory
+CD <dir>                - Change directory
+BLOAD <file> <address>  - Binary Load a raw bin file into address
+SYS <address>           - Execute code at address
+CLS                     - Clear the screen
+DUMP <address>          - Dump the contents of address to screen
+BANK <bank> <val>       - Set memory bank (2 through 7) $4000 through $e000 to val (0 to 63) which is 1 of 64 8k banks withih the 512k
+JOYTEST                 - Run the internal joystick test program
+GETCHAR <x> <y>         - Get the character as location X Y
+LOAD <file.sj>          - Load .SJ file and run
+SETLED2 <R> <G> <B>     - Set the RGB LED value
+PAPER <byte>            - Set the background colour
+INK <byte>              - Set the foreground colour
+VOL <x:>                - Set the current SD volume to x - first volume is A so command would be VOL A:
+JOY0 <mode>             - Set joystick mode for joystick 0 - 1 = normal, 2 - 3 button megadrive controller
+JOY1 <mode>             - Set joystick mode for joystick 1 - 1 = normal, 2 - 3 button megadrive controller
 
 If anyone was interested in creating anything for it.  The IO port map as follows:
 Outputs
