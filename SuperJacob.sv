@@ -18,6 +18,8 @@
 //  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //============================================================================
 
+`define INTERNAL_CPU_RAM
+
 module emu
 (
 	//Master input clock
@@ -181,9 +183,11 @@ wire        img_readonly;
 wire [63:0] img_size;
 wire        sd_ack_conf;
 
+//wire  [1:0] sdram_sz;
+
 hps_io #(.STRLEN(($size(CONF_STR))>>3), .PS2DIV(4000), .PS2WE(0)) hps_io
 (
-	.clk_sys(CLK_50M),
+	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
 	.conf_str(CONF_STR),
@@ -191,7 +195,7 @@ hps_io #(.STRLEN(($size(CONF_STR))>>3), .PS2DIV(4000), .PS2WE(0)) hps_io
 	.buttons(buttons),
 	.joystick_0(joystick_0),
 	.joystick_1(joystick_1),
-	
+//	.sdram_sz(sdram_sz),
 	
 	//.ps2_kbd_clk_out(ps2_kbd_clk_out),
 	//.ps2_kbd_data_out(ps2_kbd_data_out),
@@ -223,7 +227,9 @@ wire [7:0]joy1={~joystick_1[7],~joystick_1[6],~joystick_1[4],~joystick_1[3],~joy
 
 
 wire locked;
+wire locked2;
 wire global_reset_n=~global_reset;
+//wire global_reset=(~locked) | (~locked2) | sysreset;
 wire global_reset=(~locked) | sysreset;
 wire constant_high=1;
 wire constant_low=0;
@@ -236,10 +242,11 @@ wire clk_out1;
 wire clk_out2;
 wire clk_out3;
 wire clk_out4;
-wire clk_out_mem;
+wire clk_out5;
+wire clk_sys=clk_out5;
 
 
-mypll2 pll
+sjpll sjpll_inst
 (
 	.refclk(CLK_50M),
 	.rst(0),
@@ -247,9 +254,18 @@ mypll2 pll
 	.outclk_1(clk_out2),
 	.outclk_2(clk_out3),
 	.outclk_3(clk_out4),
-	.outclk_4(clk_out_mem),
+	.outclk_4(clk_out5),
 	.locked(locked)
 );
+
+/*pll pll_inst
+(
+	.refclk(CLK_50M),
+	.rst(0),
+	.outclk_0(clk_sys),
+	.locked(locked2)
+);*/
+
 
 assign CLK_VIDEO = clk_out1;
 assign CE_PIXEL=1;
@@ -930,46 +946,71 @@ wire z80_data_tristate_0_io_low;
   );
 
 
+`ifdef INTERNAL_CPU_RAM 
 /////////////////////// TEMP - USE INTERNAL RAM FOR CPU //
 wire [7:0] ram_data;
 wire ram_ready=1;
-//wire [15:0] tramaddr=ram_output_addr[15:0];
 tempram	tempram_inst (
 	.address (ram_output_addr[17:0]),
-	.clock (clk_out_mem),
+	.clock (clk_sys),
 	.data (data_write),
 	.wren (we_out),
 	.q (ram_data)
 	);
 
-  
-  
+`else  
 ////////////////////////SD RAM /////////////////////////
-/*wire [7:0] ram_data;
+//wire [15:0] sdram_dout;
+//reg [15:0] sdram_din;
+//reg sdram_rd;
+//reg sdram_we;
+wire [7:0] ram_data;//dram_dout[7:0];
 //wire [24:0] tramaddr={5'b00000,ram_output_addr[18:0],1'b0};
 wire ram_ready;
+
+
+
+/*always @(posedge clk_sys)
+begin
+//	ram_rd<=(~z80_top_direct_n_0_nMREQ & ~z80_top_direct_n_0_nRD);
+//	ram_wr<=(~z80_top_direct_n_0_nMREQ & ~z80_top_direct_n_0_nWR);
+	sdram_din<={data_write,data_write};
+	sdram_rd<=rd_out;
+	sdram_we<=we_out;
+end
 */
 
-
-/*always @(posedge clk_out2)
-begin
-	ram_rd<=(~z80_top_direct_n_0_nMREQ & ~z80_top_direct_n_0_nRD);
-	ram_wr<=(~z80_top_direct_n_0_nMREQ & ~z80_top_direct_n_0_nWR);
-end*/
-
-
-/*sdram ram
+sdram ram
 (
 	.*,
+	//.init(global_reset),
 	.init(~locked),
-	.clk(clk_out_mem),
-	.dout(ram_data),
-	.din (data_write),
-	.addr({6'b00000,ram_output_addr[17:0],1'b0}),
-	.we(we_out),
+	.clk(clk_sys),
+	.addr({6'b000000,ram_output_addr[18:0]}),
+//	.wtbt(0),
+	.dout(ram_data),	
+	.din(data_write),
 	.rd(rd_out),
+	.we(we_out),
+	//.dout(sdram_dout),	
+	//.din({data_write,data_write}),
+	//.rd(sdram_rd),
+	//.we(sdram_we),
+	//.din(sdram_din), 
+	/*.SDRAM_CLK(SDRAM_CLK),
+	.SDRAM_CKE(SDRAM_CKE),
+	.SDRAM_A(SDRAM_A),
+	.SDRAM_BA(SDRAM_BA),
+	.SDRAM_DQ(SDRAM_DQ),
+	.SDRAM_DQML(SDRAM_DQML),
+	.SDRAM_DQMH(SDRAM_DQMH),
+	.SDRAM_nCS(SDRAM_nCS),
+	.SDRAM_nCAS(SDRAM_nCAS),
+	.SDRAM_nRAS(SDRAM_nRAS),
+	.SDRAM_nWE(SDRAM_nWE),*/
 	.ready(ram_ready)
-);*/
+);
+`endif
   
 /////////////////////// Z80 CLK CTRL ///////////////////
 wire z80_clk_ctrl_0_outclk;
@@ -1103,8 +1144,8 @@ sd_card sd_card
 (
 	.*,
 	.reset(global_reset),
-	.clk_sys(clk_out_mem),
-	.clk_spi(clk_out_mem),
+	.clk_sys(clk_out5),
+	.clk_spi(clk_out5),
 	.sdhc(1),
 	.sck(sdclk),
 	.ss(sdss | ~vsd_sel),
