@@ -2893,7 +2893,7 @@
 		
 		
 	CMD_GETCHAR
-		call GetNextCmdChunk		;get the address to dump
+		call GetNextCmdChunk		;get x
 		ld de,CMDBUFFER2
 		ld a,(CMDBUFFER2)
 		sub 48
@@ -2901,7 +2901,7 @@
 		jp nc,CMD_Check_Num_Param_Syntax					;no valid parameter
 		call ConvStr16			;get value of dump address in HL
 		ld (TEMP16),hl
-		call GetNextCmdChunk		;get the address to dump
+		call GetNextCmdChunk		;get y
 		ld de,CMDBUFFER2
 		ld a,(CMDBUFFER2)
 		sub 48

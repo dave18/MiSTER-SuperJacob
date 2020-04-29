@@ -92,8 +92,8 @@ C2  LED_RED
 C1  LED_GREEN
 C0  LED_BLUE
 
-AF  SPRITE_WRITE_INC    Write byte to sprite memory and increase pointer (not sure this works!)
-AE  SPRITE_WRITE    Write byte to sprite memory and increase
+AF  SPRITE_WRITE_INC    Write byte to sprite memory and increase pointer
+AE  SPRITE_WRITE    Write byte to sprite memory 
 AD  **** Not used ****
 AC  SPRITE_MASK     Set the colour index value for the sprite transparency mask
 AB  SPRITE_X_OFF    Set te sprite X offset position (where sprite position 0 is compared with physical screen)
