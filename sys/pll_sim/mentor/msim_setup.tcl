@@ -94,7 +94,7 @@
 # within the Quartus project, and generate a unified
 # script which supports all the Altera IP within the design.
 # ----------------------------------------
-# ACDS 19.1 670 win32 2020.04.17.13:25:13
+# ACDS 17.0 602 win32 2020.04.29.05:23:20
 
 # ----------------------------------------
 # Initialize variables
@@ -113,7 +113,7 @@ if ![info exists QSYS_SIMDIR] {
 }
 
 if ![info exists QUARTUS_INSTALL_DIR] { 
-  set QUARTUS_INSTALL_DIR "D:/intelfpga_lite/19.1/quartus/"
+  set QUARTUS_INSTALL_DIR "D:/intelfpga_lite/17.0/quartus/"
 }
 
 if ![info exists USER_DEFINED_COMPILE_OPTIONS] { 
@@ -256,7 +256,7 @@ alias h {
   echo
   echo "SYSTEM_INSTANCE_NAME                              -- Instantiated system module name inside top level module."
   echo
-  echo "QSYS_SIMDIR                                       -- Platform Designer base simulation directory."
+  echo "QSYS_SIMDIR                                       -- Qsys base simulation directory."
   echo
   echo "QUARTUS_INSTALL_DIR                               -- Quartus installation directory."
   echo
