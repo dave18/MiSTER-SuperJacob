@@ -12,7 +12,7 @@ The original core is based on a CMOD-A7 FPGA board which uses an Artix-7 15T.
 The machine
 
 
-Z80 CPU running at 12mhz (uses T80 core), with dedicated 512k (256k on current MiSTER port) memory, bankable in 8k slots.
+Z80 CPU running at 242mhz (uses T80 core), with dedicated 512k (up to 2048k on MiSTER port) memory, bankable in 8k slots.
 
 
 4 display modes
@@ -63,8 +63,10 @@ VGA output running at 60hz
 
 
 SID 8580 sound chip (core taken from MiSTer C64 port)
+YM2203 (uses Jotego core)
+YM3526 (uses Jotego core)
 
-4 x 8 bit PCM channels - selectable frequency 3.9khz, 7.9khz, 15.8khz, 31.5khz (driven off hblank)
+4 x 8 bit PCM channels - selectable frequency up to 31.5khz (driven off hblank)
 
 Samples share 128k gfx memory space
 
@@ -72,7 +74,7 @@ Samples share 128k gfx memory space
 2 x 16 bit timers - can run between .75hz and 50khz
 
 
-Maskable interrupts generated for vblank, hblank, defined raster line, keyboard, GPIOA, GPIOB, Timer 1 and Timer 2
+Maskable interrupts generated for vblank, hblank, defined raster line, keyboard, Spr collision, GPIOA, GPIOB, Timer 1 and Timer 2, OPL Timers
 
 Button driven NMI (Not currently implemented in MiSTER port)
 
@@ -80,7 +82,7 @@ Button driven NMI (Not currently implemented in MiSTER port)
 GPIO address pulled down to zero but can be overridden via pin header (MiSTER Port just connects these to Joysticks 0 & 1)
 
 
-2 x analogue inputs (via pin header) - Not implemented in MiSTER port
+2 x analogue inputs (via pin header) - Connedto to ADC channel in MiSTER
 
 
 2 x user LED
@@ -132,11 +134,11 @@ Outputs
 
 Hex NAME            Description
 
-FF  **** Not used ****
+FF  INT_DATA_BUS    Value that will be presented to the data bus upon interrupt
 
-FE  INT_EN_FLAG     Interrupt enable flags  [TMR2,TMR1,KEYBOARD,GOPIOB,GPIOA,HSYNC,RASTERLINE,VSYNC]
+FE  INT_EN_FLAG     Interrupt enable flags  [YM_TMR,INT_TMR,KEYBOARD,SPR_COLL,GPIO,HSYNC,RASTERLINE,VSYNC]
 
-FD  INT_DATA_BUS    Value that will be presented to the data bus upon interrupt
+FD  AY_REGISTER     Reserved for AY (YM2203) - For Spectrum AY Player compatibility
 
 FC  VID_WRITE       Writes byte to current video address
 
@@ -364,9 +366,9 @@ A0  SPRITE_SELECT   Selects which sprite all other sprite operations affect
 
 94  SAMPLE_FREQ     Set sample freq 0=33k, 1=15k 2=7k 3=3k
 
-93  SAMPLE_CUST_HI  Set high byte of custom frequency pattern
+93  SAMPLE_CUST_HI  Set high byte of custom frequency
 
-92  SAMPLE_CUST_LO  Set high byte of custom frequency pattern
+92  SAMPLE_CUST_LO  Set high byte of custom frequency
 
 91  SAMPLE_VOLUME   Set sample playback volume (0 to 255)
 
@@ -422,22 +424,37 @@ A0  SPRITE_SELECT   Selects which sprite all other sprite operations affect
 
 78  ROM_OVERLAY     Rom select. 0 = RAM paged into 16k bank at address 0, any other value is ROM paged in
 
-77  RAM_BANK_7      Selects one of the 64 8k RAM bank paged into address $E000
+77  RAM_BANK_7      Selects one of the 64 (256 in MiSTER) 8k RAM bank paged into address $E000
 
-76  RAM_BANK_6      Selects one of the 64 8k RAM bank paged into address $C000
+76  RAM_BANK_6      Selects one of the 64 (256 in MiSTER) 8k RAM bank paged into address $C000
 
-75  RAM_BANK_5      Selects one of the 64 8k RAM bank paged into address $A000
+75  RAM_BANK_5      Selects one of the 64 (256 in MiSTER) 8k RAM bank paged into address $A000
 
-74  RAM_BANK_4      Selects one of the 64 8k RAM bank paged into address $8000
+74  RAM_BANK_4      Selects one of the 64 (256 in MiSTER) 8k RAM bank paged into address $8000
 
-73  RAM_BANK_3      Selects one of the 64 8k RAM bank paged into address $6000
+73  RAM_BANK_3      Selects one of the 64 (256 in MiSTER) 8k RAM bank paged into address $6000
 
-72  RAM_BANK_2      Selects one of the 64 8k RAM bank paged into address $4000
+72  RAM_BANK_2      Selects one of the 6 (256 in MiSTER)4 8k RAM bank paged into address $4000
 
-71  RAM_BANK_1      Selects one of the 64 8k RAM bank paged into address $2000
+71  RAM_BANK_1      Selects one of the 64 (256 in MiSTER) 8k RAM bank paged into address $2000
 
-70  RAM_BANK_0      Selects one of the 64 8k RAM bank paged into address $0000
+70  RAM_BANK_0      Selects one of the 64 (256 in MiSTER) 8k RAM bank paged into address $0000
 
+6F SPRITE_CLIP_L   Set Left Hand clip threshold for sprites
+
+6E SPRITE_CLIP_L   Set Right Hand clip threshold for sprites
+
+6D SPRITE_CLIP_L   Set Top clip threshold for sprites
+
+6C SPRITE_CLIP_L   Set Bottom clip threshold for sprites
+
+53 AY_DATA_WRITE   Write data to selected YM2203 register
+
+52 AY_REG_WRITE    Select YM2203 register
+
+51 OPL_DATA_WRITE   Write data to selected YM3526 register
+
+50 OPL_REG_WRITE    Select YM3526 register
 
 
 4A  DMA_LEN_LO_A    DMA Length low byte - a write here also starts the  Alternative DMA operation (create a 16 x 16 sprite from 4 8 x 8 
@@ -572,7 +589,7 @@ FF  INT_STATUS      Interrupt status        [BUTTON,X,KEYBOARD,GOPIOB,GPIOA,HSYN
 
 FE  INT_EN_FLAG     Interrupt enable flags  [BUTTON,X,KEYBOARD,GOPIOB,GPIOA,HSYNC,RASTERLINE,VSYNC]
 
-
+FD  AY_DATA_READ  For Spectrum compatibility
 
 F1  RASTER_HI       Reads high 2 bits of raster line number
 
@@ -588,11 +605,25 @@ D4  TILEMAP_READ_X     Get the current cursor column
 
 D3  TILEMAP_READ_Y     Get the current cursor row
 
+C1 ADC_1_READ         Read value from ADC 1
 
+C0 ADC_0_READ         Read value from ADC 0
+
+7B TMR_STATUS       Read internal Timer Status flags (IRQ,xxxxx,TMR2,TMR1)
+
+7A GPIO_STATUS       Read GPIO Status flags (xxxxxx,GPIOB,GPIOA)
 
 39  I2C_READ        Read the data send from the I2C interface
 
 38  I2C_STATUS      Read the status byte from the I2C interface
+
+53 AY_DATA_READ     Read data for YM2203
+
+52 AY_STATUS_READ     Read status register for YM2203
+
+50 OPL_STATUS_READ     Read status register for YM3526
+
+
 
 
 
@@ -623,4 +654,3 @@ D3  TILEMAP_READ_Y     Get the current cursor row
 
 
 01  KEY_DATA        Reads the most recent ASCII value PS2 keyboard state
-
