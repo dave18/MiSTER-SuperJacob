@@ -47,7 +47,7 @@ module z80_data_tristate(
         io_low<=1;
     end
 
-	always @ (posedge clk)
+	always //@ (posedge clk)
 	   begin 
 			if (!mreq)
 			begin

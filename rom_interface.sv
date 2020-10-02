@@ -211,58 +211,58 @@ module rom_interface(
 	    end
 	    else io_ack<=0;
     end
-	  
+end	  
 	//always @ (posedge clk)
-	always_comb begin
-      if ((nmi_in==0) && (m1==0)) romsel<=1;
+always_comb begin
+      if ((nmi_in==0) && (m1==0)) romsel=1;
        
-	   if (dma_assert)
-	   begin 
+	  // if (dma_assert)
+	 //  begin 
 	        casez (input_addr)
 	        16'b000?????????????: begin       //0 to 8191
 			     //if (romsel) rom_output_addr<=input_addr[13:0]; else 
 			     //ram_output_addr<=(bank0 << 13)+input_addr;
-			     ram_output_addr<={bank0,input_addr[12:0]};
-			     rom_output_addr<=input_addr[13:0];
+			     ram_output_addr={bank0,input_addr[12:0]};
+			     rom_output_addr=input_addr[13:0];
 			end
 			16'b001?????????????: begin       //8192 to 16383
 			     //if (romsel) rom_output_addr<=input_addr[13:0]; else 
 			     //ram_output_addr<=(bank1 << 13)+(input_addr-8192);
-			     ram_output_addr<={bank1,input_addr[12:0]};
-			     rom_output_addr<=input_addr[13:0];
+			     ram_output_addr={bank1,input_addr[12:0]};
+			     rom_output_addr=input_addr[13:0];
 			end
 			16'b010?????????????: begin       //16384 to 24575
 			     //ram_output_addr<=(bank2 << 13)+(input_addr-16384);
-			     ram_output_addr<={bank2,input_addr[12:0]};
+			     ram_output_addr={bank2,input_addr[12:0]};
 			end
 			16'b011?????????????: begin       //24576 to 32767
 			     //ram_output_addr<=(bank3 << 13)+(input_addr-24576);
-			     ram_output_addr<={bank3,input_addr[12:0]};
+			     ram_output_addr={bank3,input_addr[12:0]};
 			end
 			16'b100?????????????: begin       //32768 to 40959
 			     //ram_output_addr<=(bank4 << 13)+(input_addr-32768);
-			     ram_output_addr<={bank4,input_addr[12:0]};
+			     ram_output_addr={bank4,input_addr[12:0]};
 			end
 			16'b101?????????????: begin       //40960 to 49151
 			     //ram_output_addr<=(bank5 << 13)+(input_addr-40960);
-			     ram_output_addr<={bank5,input_addr[12:0]};
+			     ram_output_addr={bank5,input_addr[12:0]};
 			end
 			16'b110?????????????: begin       //49152 to 57343
 			     //ram_output_addr<=(bank6 << 13)+(input_addr-49152);
-			     ram_output_addr<={bank6,input_addr[12:0]};
+			     ram_output_addr={bank6,input_addr[12:0]};
 			end
 			16'b111?????????????: begin       //57344 to 65535
 			     //ram_output_addr<=(bank7 << 13)+(input_addr-57344);
-			     ram_output_addr<={bank7,input_addr[12:0]};
+			     ram_output_addr={bank7,input_addr[12:0]};
 			end
 			
 			endcase
-		end
-		else ram_output_addr<=dma_addr;	
+	//	end
+	//	else ram_output_addr=dma_addr;	
 		
 		
-		we_out<=~we & ~mem_req;
-		rd_out<=~rd & ~mem_req;
+		we_out=~we & ~mem_req;
+		rd_out=~rd & ~mem_req;
 		
 		
 		if (!mem_req)
@@ -270,64 +270,64 @@ module rom_interface(
 			     if ((!we) && (rd))
 			     begin
 			         //cpu_data_in<=data_out_from_device;
-			         data_write<=cpu_data_in;
-			         cpu_data_out<=8'bZ;
-			         data_to_io<=8'bZ;
+			         data_write=cpu_data_in;
+			         cpu_data_out=8'bZ;
+			         data_to_io=8'bZ;
 			     end 
 			     if ((we) && (!rd))
 			     begin
-						if ((input_addr<16384) && (romsel)) cpu_data_out<=rom_data; else cpu_data_out<=ram_data;
+						if ((input_addr<16384) && (romsel)) cpu_data_out=rom_data; else cpu_data_out=ram_data;
 			         //cpu_data_out<=data_from_memory;
-			         data_write<=8'bZ;
-			         data_to_io<=8'bZ;
+			         data_write=8'bZ;
+			         data_to_io=8'bZ;
 			     end
 			     if ((we) && (rd))
 			     begin
-			         data_write<=8'bZ;
-			         data_to_io<=8'bZ;
-			         cpu_data_out<=8'bZ;
+			         data_write=8'bZ;
+			         data_to_io=8'bZ;
+			         cpu_data_out=8'bZ;
 			     end
-			     io_low<=1;
+			     io_low=1;
 			end
 			if ((!io_req) && (m1))
 			begin
 			     if ((!we) && (rd))
 			     begin
-			         data_to_io<=cpu_data_in;
-			         cpu_data_out<=8'bZ;
-			         data_write<=8'bZ;
-			         io_low<=0;
+			         data_to_io=cpu_data_in;
+			         cpu_data_out=8'bZ;
+			         data_write=8'bZ;
+			         io_low=0;
 			     end
 			     if ((we) && (!rd))
 			     begin
-			         cpu_data_out<=data_from_io;
-			         data_write<=8'bZ;
-			         data_to_io<=8'bZ;
-			         io_low<=0;
+			         cpu_data_out=data_from_io;
+			         data_write=8'bZ;
+			         data_to_io=8'bZ;
+			         io_low=0;
 			     end
 			     if ((we) && (rd))
 			     begin
-			         data_write<=8'bZ;
-			         data_to_io<=8'bZ;
-			         cpu_data_out<=8'bZ;
+			         data_write=8'bZ;
+			         data_to_io=8'bZ;
+			         cpu_data_out=8'bZ;
 			     end
 			     
 			end
 			if ((!io_req) && (!m1))           //int ackknowledge
 			begin
-			     data_write<=8'bZ;
-			     data_to_io<=8'bZ;
-			     cpu_data_out<=data_from_io;
-			     io_low<=1;
+			     data_write=8'bZ;
+			     data_to_io=8'bZ;
+			     cpu_data_out=data_from_io;
+			     io_low=1;
 			end
 			if ((io_req) && (mem_req)) 
 			begin
-			     data_write<=8'bZ;
-			     data_to_io<=8'bZ;
-			     cpu_data_out<=8'bZ;
-			     io_low<=1;
+			     data_write=8'bZ;
+			     data_to_io=8'bZ;
+			     cpu_data_out=8'bZ;
+			     io_low=1;
 			end
 	end
-end
+//end
 	   
 endmodule

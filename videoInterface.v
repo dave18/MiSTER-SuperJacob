@@ -27,6 +27,7 @@ module videoInterface(
     input [9:0] CounterY,
     input inDisplayArea,
     input [15:0] p_data_in,
+    input [15:0] p_data_in2,
     input [11:0] ls_data_in,
     input [11:0] ls_data_in2,
     input ls_data_in3,
@@ -38,6 +39,8 @@ module videoInterface(
     input [7:0] character_rom_in,
     input [15:0] tilemap0_data_in,
     input [15:0] tilemap1_data_in,
+    input [7:0] tilemap0_data_in2,
+    input [7:0] tilemap1_data_in2,
     input scanlines,
     input nreset,
     output reg [7:0] io_data_out,
@@ -47,6 +50,7 @@ module videoInterface(
     output reg [7:0] v_data_out,
     input [7:0] v_data_in,
     output reg [7:0] p_address_read,         //address for palette memory
+    //output reg [7:0] p_address_read2,         //address for palette memory
     output reg [7:0] p_address_write,         //address for palette memory
     output reg [15:0] p_data_out,
     output reg p_wren,
@@ -96,8 +100,8 @@ localparam  VID03YPOS=523;
 assign vid_we_out=~vid_we;
 
 reg vid_we;
-reg [1:0] ByteDelay;	//We only want to increase read address every 2 pixels  
-reg [1:0] ByteDelay2;	//We only want to increase read address every 2 pixels
+reg [2:0] ByteDelay;	//We only want to increase read address every 2 pixels  
+reg [2:0] ByteDelay2;	//We only want to increase read address every 2 pixels
 reg [16:0] n_address;	//base address for video memory
 reg [16:0] v_address;	//address for reading video memory
 reg [16:0] v_temp_addr;	//for holding current video read address when writing to a different address
@@ -148,9 +152,15 @@ reg [15:0] sample_read_address [3:0];
 reg [15:0] sample_length [3:0];
 reg [15:0] sample_read_address_active [3:0]; 
 reg [15:0] sample_length_active [3:0];
-reg [15:0] sample_freq [3:0];
+reg [16:0] sample_freq [3:0];       //17 bit counter to control sample freq (written value 0 to 65535 + 3200)
+reg [16:0] sample_timer [3:0];       //17 bit counter to control sample freq (written value 0 to 65535 + 3200)
 reg [15:0] sample_volume [3:0];
+reg sample_trigger [3:0];
 reg sample_loop [3:0];
+reg [7:0] sample_latch_value [3:0];
+reg [7:0] sample_prelatch_value [3:0];
+reg sample_latch_ready [3:0];
+
 //reg [1:0] sample_counter;
 reg mem_can_write;
 reg mem_can_latch;
@@ -161,6 +171,8 @@ reg [7:0] io_latch;
 reg [7:0] pal_read_latch;
 reg [7:0] tile0_latch;
 reg [7:0] tile1_latch;
+reg [7:0] r_pal_latch;
+reg [7:0] gb_pal_latch;
 
 reg io_ack;	//control bit - ioreq needs to go high before we acknowledge next ioreq
 reg write_wait; //flag to indicate a data write is queued
@@ -187,6 +199,7 @@ reg [12:0] vid2_char_address;
 reg [6:0] cursorx;
 reg [5:0] cursory;
 reg contention_flag;
+reg in_contention;
 reg [11:0] tile0_addr_read_latch;
 reg [11:0] tile1_addr_read_latch;
 
@@ -228,7 +241,6 @@ begin
 	ByteDelay <=0;
 	ByteDelay2 <=0;
 	v_data <= 0;
-	v_data2 <= 0;
 	ByteCounter <=0;
 	ByteCounter2 <=0;
 	ByteWrapCounter <= 0;
@@ -328,7 +340,6 @@ begin
 	ByteDelay <=0;
 	ByteDelay2 <=0;
 	v_data <= 0;
-	v_data2 <= 0;
 	ByteCounter <=0;
 	ByteCounter2 <=0;
 	ByteWrapCounter <= 0;
@@ -447,7 +458,7 @@ begin
 	if (ByteRead==0)
 	begin		
 //	    if ((CounterX[9:1]>=h_read_offset[8:0]-16) && (CounterX[9:1]<h_read_offset[8:0]) && (CounterY<480) && (contention_flag)) cpu_wait<=0;
-		if ((CounterX[9:1]==h_read_offset[8:0]) && (CounterX[0]==1) && (CounterY<480)) //turn on display at start of new line is y < 480 - actually start reading new byte on last line 523
+		if ((CounterX[9:1]==h_read_offset[8:0]) && (CounterX[0]==0) && (CounterY<480)) //turn on display at start of new line is y < 480 - actually start reading new byte on last line 523
 		begin
 //			if (contention_flag) cpu_wait<=0; else cpu_wait<=1;
 			ByteRead <= 1;
@@ -462,7 +473,7 @@ begin
 	end
 	else
 	begin
-		if (ByteDelay[0:0]==1'h1)
+		if (ByteDelay[1:0]==2'b10)
 		begin
 			ByteCounter <= ByteCounter -1;
 			if (ByteStartCounter) ByteStartCounter = ByteStartCounter -1;
@@ -478,11 +489,11 @@ begin
 	if (ByteRead2==0)
 	begin		
 //	    if ((CounterX[9:1]>=h_read_offset2[8:0]-20) && (CounterX[9:1]<h_read_offset2[8:0]) && ((CounterY<480) || (CounterY>521)) && (contention_flag)) cpu_wait<=0;
-		if ((CounterX[9:1]==h_read_offset2[8:0]) && (CounterX[0]==1) && ((CounterY<480) || (CounterY>(VID03YPOS-2)))) //turn on display at start of new line is y < 480 - actually start reading new byte on last line 523
+		if ((CounterX[9:1]==h_read_offset2[8:0]) && (CounterX[0]==0) && ((CounterY<480) || (CounterY>(VID03YPOS-2)))) //turn on display at start of new line is y < 480 - actually start reading new byte on last line 523
 		begin
 //			if (contention_flag) cpu_wait<=0; else cpu_wait<=1;
 			ByteRead2 <= 1;
-			ByteCounter2 <= 640+24;//+36;//+(h_scroll_pos2[1:0]);
+			ByteCounter2 <= 640+24;//+36;//+(h_scroll_pos[1:0]);
 			ByteWrapMax2 <=640+20-(h_scroll_pos2_latch << 1);
 			ByteWrapCounter2 <= 0;
 			//if (ByteRead==0) ByteDelay<=0;
@@ -491,7 +502,7 @@ begin
 	end
 	else
 	begin
-		if (ByteDelay2[0:0]==1'h1)
+		if (ByteDelay2[1:0]==2'b10)
 		begin
 			ByteCounter2 <= ByteCounter2 -1;
 			if (ByteStartCounter2) ByteStartCounter2 = ByteStartCounter2 -1;
@@ -534,7 +545,7 @@ begin
 	end
 	else
 	begin
-		if (ByteDelay[0:0]==1'h1)
+		if (ByteDelay[1:0]==2'b10)
 		begin
 			ByteCounter <= ByteCounter -1;
 			if (ByteStartCounter) ByteStartCounter = ByteStartCounter -1;
@@ -569,7 +580,7 @@ begin
 	end
 	else
 	begin
-		if (ByteDelay[0:0]==1'h1)
+		if (ByteDelay[1:0]==2'b10)
 		begin
 			ByteCounter <= ByteCounter -1;
 			if (ByteStartCounter) ByteStartCounter = ByteStartCounter -1;
@@ -598,6 +609,7 @@ end
     begin
         //if (sample_freq[0])
         //begin
+        dac_out<=(sample_latch_value[0] * sample_volume[0]);
             if (sample_length_active [0]==0)
             begin
                 if (sample_loop[0])
@@ -620,24 +632,34 @@ end
                 begin
                     //if (sample_volume[0]<7 ) dac_out<=(v_data_in / (7-sample_volume[0])); else dac_out<=v_data_in;
                     //dac_out<=(v_data_in << sample_volume[0]);
-                    dac_out<=(v_data_in * sample_volume[0]);
-                    if (sample_freq[0] [0])
+                    
+                    if (sample_trigger[0])
                     begin
+                        sample_prelatch_value[0]<=v_data_in;
+                        sample_trigger[0]<=0;
                         sample_length_active[0]<=sample_length_active[0]-1;
                         sample_read_address_active[0]<=sample_read_address_active[0]+1;
                        // if (sample_length==1) sample_playing<=0;
                     end
-                    sample_freq[0]<={sample_freq[0] [0],sample_freq[0] [15:1]};
+                    //sample_freq[0]<={sample_freq[0] [0],sample_freq[0] [15:1]};
                 end
+            end
+            sample_timer[0]<=sample_timer[0]+17'd1;
+            if (sample_timer[0]==sample_freq[0])
+            begin
+                sample_timer[0]<=0;
+                sample_trigger[0]<=1;                
+                sample_latch_value[0]<=sample_prelatch_value[0];
             end
     end
     else
     begin
-        dac_out<=8'h0;//80;   //silence DAC
+        dac_out<=16'h8000;//80;   //silence DAC
         //dac_out<={0,dac_out[7:1]};   //gradually silence DAC to avoid clicks
     end
     if (sample_playing1)
     begin
+        dac_out1<=(sample_latch_value[1] * sample_volume[1]);
         //if (sample_freq[0])
         //begin
             if (sample_length_active [1]==0)
@@ -662,24 +684,34 @@ end
                 begin
                     //if (sample_volume[1]<7 ) dac_out1<=(v_data_in / (7-sample_volume[1])); else dac_out1<=v_data_in;
                     //dac_out1<=(v_data_in << sample_volume[1]);
-                    dac_out1<=(v_data_in * sample_volume[1]);
-                    if (sample_freq[1] [0])
+                    //dac_out1<=(sample_latch_value[1] * sample_volume[1]);
+                    if (sample_trigger[1])
                     begin
+                        sample_prelatch_value[1]<=v_data_in;
+                        sample_trigger[1]<=0;
                         sample_length_active[1]<=sample_length_active[1]-1;
                         sample_read_address_active[1]<=sample_read_address_active[1]+1;
                        // if (sample_length==1) sample_playing<=0;
                     end
-                    sample_freq[1]<={sample_freq[1] [0],sample_freq[1] [15:1]};
+                    //sample_freq[1]<={sample_freq[1] [0],sample_freq[1] [15:1]};
                 end
+            end
+            sample_timer[1]<=sample_timer[1]+1;
+            if (sample_timer[1]==sample_freq[1])
+            begin
+                sample_timer[1]<=0;
+                sample_trigger[1]<=1;
+                sample_latch_value[1]<=sample_prelatch_value[1];
             end
     end
     else
     begin
-        dac_out1<=8'h0;//80;   //silence DAC
+        dac_out1<=16'h8000;//80;   //silence DAC
         //dac_out<={0,dac_out[7:1]};   //gradually silence DAC to avoid clicks
     end
     if (sample_playing2)
     begin
+        dac_out2<=(sample_latch_value[2] * sample_volume[2]);
         //if (sample_freq[0])
         //begin
             if (sample_length_active [2]==0)
@@ -704,24 +736,34 @@ end
                 begin
                     //if (sample_volume[2]<7 ) dac_out2<=(v_data_in / (7-sample_volume[2])); else dac_out2<=v_data_in;
                     //dac_out2<=(v_data_in << sample_volume[2]);
-                    dac_out2<=(v_data_in * sample_volume[2]);
-                    if (sample_freq[2] [0])
+                    //dac_out2<=(sample_latch_value[2] * sample_volume[2]);
+                    if (sample_trigger[2])
                     begin
+                        sample_prelatch_value[2]<=v_data_in;
+                        sample_trigger[2]<=0;
                         sample_length_active[2]<=sample_length_active[2]-1;
                         sample_read_address_active[2]<=sample_read_address_active[2]+1;
                        // if (sample_length==1) sample_playing<=0;
                     end
-                    sample_freq[2]<={sample_freq[2] [0],sample_freq[2] [15:1]};
+                    //sample_freq[2]<={sample_freq[2] [0],sample_freq[2] [15:1]};
                 end
+            end
+            sample_timer[2]<=sample_timer[2]+1;
+            if (sample_timer[2]==sample_freq[2])
+            begin
+                sample_timer[2]<=0;
+                sample_trigger[2]<=1;
+                sample_latch_value[2]<=sample_prelatch_value[2];
             end
     end
     else
     begin
-        dac_out2<=8'h0;//80;   //silence DAC
+        dac_out2<=16'h8000;//80;   //silence DAC
         //dac_out<={0,dac_out[7:1]};   //gradually silence DAC to avoid clicks
     end
     if (sample_playing3)
     begin
+        dac_out3<=(sample_latch_value[3] * sample_volume[3]);
         //if (sample_freq[0])
         //begin
             if (sample_length_active [3]==0)
@@ -746,20 +788,29 @@ end
                 begin
                     //if (sample_volume[3]<7 ) dac_out3<=(v_data_in / (7-sample_volume[3])); else dac_out3<=v_data_in;
                     //dac_out3<=(v_data_in << sample_volume[3]);
-                    dac_out3<=(v_data_in * sample_volume[3]);
-                    if (sample_freq[3] [0])
+                    dac_out3<=(sample_latch_value[3] * sample_volume[3]);
+                    if (sample_trigger[3])
                     begin
+                        sample_prelatch_value[3]<=v_data_in;
+                        sample_trigger[3]<=0;
                         sample_length_active[3]<=sample_length_active[3]-1;
                         sample_read_address_active[3]<=sample_read_address_active[3]+1;
                        // if (sample_length==1) sample_playing<=0;
                     end
-                    sample_freq[3]<={sample_freq[3] [0],sample_freq[3] [15:1]};
+                    //sample_freq[3]<={sample_freq[3] [0],sample_freq[3] [15:1]};
                 end
+            end
+            sample_timer[3]<=sample_timer[3]+1;
+            if (sample_timer[3]==sample_freq[3])
+            begin
+                sample_timer[3]<=0;
+                sample_trigger[3]<=1;
+                sample_latch_value[3]<=sample_prelatch_value[3];
             end
     end
     else
     begin
-        dac_out3<=8'h0;//80;   //silence DAC
+        dac_out3<=16'h8000;//80;   //silence DAC
         //dac_out<={0,dac_out[7:1]};   //gradually silence DAC to avoid clicks
     end
 
@@ -1137,6 +1188,11 @@ end
 				    if (io_data_in[0])
 				    begin
 				        sample_playing<=1;
+				        sample_timer[0]<=0;
+				        sample_trigger[0]<=0;
+				        sample_latch_value[0]<=0;
+				        sample_prelatch_value[2]<=0;
+				        sample_latch_ready[0]<=0;
 				        sample_read_address_active[0]<=sample_read_address[0];
 				        sample_length_active[0]<=sample_length[0];
 				        if (io_data_in[4]) sample_loop[0]<=1; else sample_loop[0]<=0;
@@ -1144,6 +1200,11 @@ end
 				    if (io_data_in[1])
 				    begin
 				        sample_playing1<=1;
+				        sample_timer[1]<=0;
+				        sample_trigger[1]<=0;
+				        sample_latch_value[1]<=0;
+				        sample_prelatch_value[1]<=0;
+				        sample_latch_ready[1]<=0;
 				        sample_read_address_active[1]<=sample_read_address[1];
 				        sample_length_active[1]<=sample_length[1];
 				        if (io_data_in[5]) sample_loop[1]<=1; else sample_loop[1]<=0;
@@ -1151,6 +1212,11 @@ end
 				    if (io_data_in[2])
 				    begin
 				        sample_playing2<=1;
+				        sample_timer[2]<=0;
+				        sample_trigger[2]<=0;
+				        sample_latch_value[2]<=0;
+				        sample_prelatch_value[2]<=0;
+				        sample_latch_ready[2]<=0;
 				        sample_read_address_active[2]<=sample_read_address[2];
 				        sample_length_active[2]<=sample_length[2];
 				        if (io_data_in[6]) sample_loop[2]<=1; else sample_loop[2]<=0;
@@ -1158,6 +1224,11 @@ end
 				    if (io_data_in[3])
 				    begin
 				        sample_playing3<=1;
+				        sample_timer[3]<=0;
+				        sample_trigger[3]<=0;
+				        sample_latch_value[3]<=0;
+				        sample_prelatch_value[3]<=0;
+				        sample_latch_ready[3]<=0;
 				        sample_read_address_active[3]<=sample_read_address[3];
 				        sample_length_active[3]<=sample_length[3];
 				        if (io_data_in[7]) sample_loop[3]<=1; else sample_loop[3]<=0;
@@ -1227,27 +1298,32 @@ end
 				'h94:   begin           //set sample frequency  0=31500 1=15,750 2=7,875 3=3,937
 				    case (io_data_in[1:0])
 				        'h0: begin          //uses 16 bit rotating shift register to only update sample when
-				            sample_freq [sample_ptr]<=16'b1010101010101010;  //a 1 is in the least significant bit
+				            //sample_freq [sample_ptr]<=16'b1010101010101010;  //a 1 is in the least significant bit
+				            sample_freq [sample_ptr]<=17'd3200; 
 				         end
 				         'h1: begin
-				            sample_freq [sample_ptr]<=16'b1000100010001000;
+				            //sample_freq [sample_ptr]<=16'b1000100010001000;
+				            sample_freq [sample_ptr]<=17'd6400;
 				         end
 				         'h2: begin
-				            sample_freq [sample_ptr]<=16'b1000000010000000;
+				            //sample_freq [sample_ptr]<=16'b1000000010000000;
+				            sample_freq [sample_ptr]<=17'd12800;
 				         end
 				         'h3: begin
-				            sample_freq [sample_ptr]<=16'b1000000000000000;
+				            //sample_freq [sample_ptr]<=16'b1000000000000000;
+				            sample_freq [sample_ptr]<=17'd25600;
 				         end
 				    endcase
 				    
 				end
 				
 				'h93:   begin
-				    sample_freq [sample_ptr] [15:8]<=io_data_in;
+				    sample_freq [sample_ptr]<=((sample_freq [sample_ptr]-17'd3200) & 17'hff)+io_data_in+17'd3200;
 				end
 				
 				'h92:   begin
-				    sample_freq [sample_ptr] [7:0]<=io_data_in;
+				    //sample_freq [sample_ptr] [7:0]<=io_data_in;
+				    sample_freq [sample_ptr]<=((sample_freq [sample_ptr]-17'd3200) & 17'hff00)+(io_data_in<<8)+17'd3200;
 				end
 				
 				'h91:   begin
@@ -1295,10 +1371,14 @@ end
 
     if (io_out==0)
     begin
-        if ((io_ack==0) && (contention_flag==0)); //have we already acknowledged it?
+        if ((io_ack==0) && (contention_flag==0)) //have we already acknowledged it?
 		begin
 			io_ack<=1;	//acknowledge it
             case (io_addr_in[7:0])
+                'hfc:  begin
+                    io_latch<=v_data_in;
+                    io_data_out<=v_data_in;
+                 end
                  'hdf:  begin
                     io_latch<={7'b0,selected_tilemap};
                     io_data_out<={7'b0,selected_tilemap};
@@ -1313,9 +1393,9 @@ end
 			         begin
 			             io_data_out<=tile0_latch;
 			             io_latch<=tile0_latch;
-			         end
-			         
+			         end			         
 			     end
+			     
 			     'hd4:   begin
 			         io_latch<=cursorx;
 			         io_data_out<=cursorx;
@@ -1323,6 +1403,15 @@ end
 			     'hd3:   begin
 			         io_latch<=cursory;
 			         io_data_out<=cursory;
+			     end
+			     
+			     'h8f:	begin              //get red value of current palette entry 					             
+			         io_data_out<=r_pal_latch;
+			         io_latch<=r_pal_latch;
+			     end
+			     'h8e:	begin              //get green and blue  value of current palette entry 					             
+			         io_data_out<=gb_pal_latch;
+			         io_latch<=gb_pal_latch;
 			     end
 		   endcase
 		end
@@ -1335,7 +1424,8 @@ end
 
 if (vid_mode==0)                // **** tile mapper mode ****
 begin
-    if (cpu_wait)
+
+   if (cpu_wait)
     begin
 	   mem_can_write<=1;	//assume we can write to memory unless we set flag otherwise
 	   mem_can_latch<=1;
@@ -1345,6 +1435,11 @@ begin
 	   mem_can_write<=0;	//assume we can write to memory unless we set flag otherwise
 	   mem_can_latch<=0;
 	end
+	
+	r_pal_latch<={4'b0000,p_data_in2[11:8]};
+	gb_pal_latch<=p_data_in2[7:0];
+	tile0_latch<=tilemap0_data_in2;
+	tile1_latch<=tilemap1_data_in2;
 	   
 	
 	if ((write_wait==0) && (tile_gfx_write_wait==0) && (write_latched==0) && (sample_write_wait==0))
@@ -1356,8 +1451,15 @@ begin
 	
 	if ((ByteRead==0) && (ByteRead2==0))   //Manage Video Ram Contention prior to screen drawing
 	begin
-	   if ((CounterX>=780-8) && (CounterY<480) && (contention_flag)) cpu_wait<=0; else cpu_wait<=1;	
+	   //if ((CounterX>=780-8) && (CounterY<480) && (contention_flag)) cpu_wait<=0; else cpu_wait<=1;
+	   if ((CounterX>=780-8) && (contention_flag) && ((CounterY<480) || (CounterY>(VID03YPOS-2)))   ) cpu_wait<=0; else cpu_wait<=1;	
 	end
+
+	
+	/*if ((ByteRead==0) && (ByteRead2==0))   //Manage Video Ram Contention prior to screen drawing
+	begin
+	   if ((CounterX>=780-8) && ((CounterY<480) || (CounterY>(VID03YPOS-2)))) in_contention<=1; else in_contention<=0;	
+	end else in_contention<=1;*/
 	
 	
 
@@ -1376,28 +1478,29 @@ begin
 				tilemap0_data_latch<=tilemap0_data_in[11:0];
 //				tilemap0_pal_latch<=tilemap0_data_in[15:12];
 			end
-			if (CounterX==780-5)// && (CounterY<480)) 
-			begin
-			     tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];			             
-			end
-			if (CounterX>=780-3) //&& (CounterY<480)) 
-			begin
-			     if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-			end
-			if (scanlines) ls_address<=0; else ls_address<=1;
+			//if (CounterX==780-5)// && (CounterY<480)) 
+			//begin
+			     //tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];			             
+			//end
+			//if (CounterX>=780-3) //&& (CounterY<480)) 
+			//begin
+			     //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+			//end
+			//if (scanlines) ls_address<=0; else ls_address<=1;
+			ls_address<=0;
 			v_data<=0;  //clear v_data to zero outside of display
 			tile_count_h<=1;			
-			if ((CounterX<780-8) || ((CounterY>=480) && (CounterY<=521)))
-			begin
+			//if ((CounterX<780-8) || ((CounterY>=480) && (CounterY<=521)))
+			//begin
 			   //v_data <= 0;  //clear v_data to zero outside of display
-			   tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];
-	           if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-	        end
+			  // tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];
+	           //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+	        //end
 			
 			if ((CounterX==780-9) && (scanlines))
 			begin
 		      h_scroll_pos<=h_scroll_pos_latch;
-		      h_read_offset<=(372+24)-h_scroll_pos_latch[2:0];  //this controls the timing for h scroll
+		      h_read_offset<=(374+25)-h_scroll_pos_latch[2:0];  //this controls the timing for h scroll
 		      h_char_counter<=(h_scroll_pos_latch[8:3]);		      
 		      base_char_address[11:0]<=((v_scroll_pos[8:3]+tile_row)<<6)+h_scroll_pos_latch[8:3];     		      
 		    end
@@ -1416,30 +1519,31 @@ begin
 				if (scanlines==0) v_address<={tilemap1_data_in[10:0],tile_count_v2,3'b000};
 				tilemap1_data_latch<=tilemap1_data_in[11:0];
 			end
-			if (CounterX==780-1) 
-			begin
-			     tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];			             
+			//if (CounterX==780-1) 
+			//begin
+			    // tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];			             
 			     //p_address_read[7:0]<={tilemap0_data_in[15:12],v_data_in[7:4]};
-			end
+			//end
 			
-			if (CounterX>=780) 
-			begin
-			     if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
-			end
-			ls_address2<=0;
+			//if (CounterX>=780) 
+			//begin
+			     //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+			//end
+			if (scanlines) ls_address2<=0; else ls_address2<=1;
+			//ls_address2<=0;
 			if (scanlines) ls_address3<=0; else ls_address3<=1;
 			v_data2 <= 0;  //clear v_data to zero outside of display
 			tile_count_h2<=1;			
-			if ((CounterX<780-4) || ((CounterY>=480) && (CounterY<=521)))
-			begin
-			   tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
-	           if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
-	        end
+			//if ((CounterX<780-4) || ((CounterY>=480) && (CounterY<=521)))
+			//begin
+			   //tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
+	           //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+	        //end
 			
 			if ((CounterX==780-9) && (scanlines))
 			begin
 		      h_scroll_pos2<=h_scroll_pos2_latch;
-		      h_read_offset2<=(371+24)-h_scroll_pos2_latch[2:0];  //this controls the timing for h scroll
+		      h_read_offset2<=(373+25)-h_scroll_pos2_latch[2:0];  //this controls the timing for h scroll
 		      h_char_counter2<=(h_scroll_pos2_latch[8:3]);		      
 		      base_char_address2[11:0]<=((v_scroll_pos2[8:3]+tile_row2)<<6)+h_scroll_pos2_latch[8:3];     		      
 		    end
@@ -1468,7 +1572,11 @@ begin
 			begin
 			    if (contention_flag) cpu_wait<=0; else cpu_wait<=1;
 			    if (ByteDelay==0)
-			    begin			        			        
+			    begin
+			    
+			       //r_pal_latch<={4'b0000,p_data_in[11:8]};
+			       //gb_pal_latch<=p_data_in[7:0];
+			    			        			        
 			        ls_wren<=0;
 			        if (tile_count_h==0)
 					begin
@@ -1485,26 +1593,32 @@ begin
                             h_char_counter<=h_char_counter+1;
                         end                         
 					end
-					else tilemap0_address_read<=tilemap0_address_write[12:1];
+					//else tilemap0_address_read<=tilemap0_address_write[12:1];
 					
 					
 			    end  
 			    
-			    if( ByteDelay==1)
+			    if( ByteDelay==2)
 			    begin
+			    
+			       //r_pal_latch<={4'b0000,p_data_in[11:8]};
+			       //gb_pal_latch<=p_data_in[7:0];
+			    
 			        ls_address<=ls_address+1;			    
 			        p_address_read[7:0]<=v_data_in[7:0];
 			    end
 			    
-			    if (ByteDelay==2)
+			    if (ByteDelay==4)
 			    begin
 			    end
 			    
-			    if (ByteDelay==3)
+			    if (ByteDelay==6)
 			    begin
+			        
 			        v_data[11:0]<=p_data_in[11:0];	//copy latched byte video out
 			        ls_data_out[11:0]<=p_data_in[11:0];	//copy latched byte video out
 			        ls_wren<=1;
+			       
 			        
 			        tile_count_h<=tile_count_h+1;
 			        if (tile_count_h==0)
@@ -1516,7 +1630,7 @@ begin
 				    else
 				    begin
 				        v_address<={tilemap0_data_latch[10:0],tile_count_v,tile_count_h};
-				        if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+				        //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
 				    end
 					
 					if (ByteWrapCounter==639+20)
@@ -1524,38 +1638,40 @@ begin
 						tile_count_v<=tile_count_v+1;
 						if (tile_count_v==7) tile_row<=tile_row+1;
 					end
+				    
+				    //p_address_read<=p_address_write;	
 			    end	
 			end
 			
 			
 			if (ByteRead2)
 			begin		   
-			    if (ByteDelay2==0)
-			    begin
-			       tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
-    	           if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
-			    end  
+			    //if (ByteDelay2==0)
+			    //begin
+			       //tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
+    	           //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+			    //end  
 			    
-			    if( ByteDelay2==1)
+			    if( ByteDelay2==2)
 			    begin
 			        ls_address2<=ls_address2+1;
 			        ls_address3<=ls_address3+1;
-			        tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
-    	           if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+			       // tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
+    	           //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
 			    end
 			    
-			    if (ByteDelay2==2)
+			    if (ByteDelay2==4)
 			    begin	               
-			       tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
-    	           if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+			       //tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
+    	           //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
 			    end
 			    
-			    if (ByteDelay2==3)
+			    if (ByteDelay2==6)
 			    begin
 					v_data2[11:0]<=ls_data_in2[11:0];//0;//fglatch;	
 					foregroundmask<=ls_data_in3;
-		            tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
-    	            if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+		            //tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
+    	            //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
 			    end
 			end
 		end
@@ -1563,28 +1679,28 @@ begin
 		begin
 			if (ByteRead) 
 			begin	
-			    if (ByteDelay==0)
-			    begin
-			        tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
-    	            if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-			    end 
-			    if (ByteDelay==1)
+			    //if (ByteDelay==0)
+			    //begin
+			        //tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
+    	            //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+			    //end 
+			    if (ByteDelay==2)
 			    begin
 			        ls_address<=ls_address+1;
-			        tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
-    	            if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+			      //  tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
+//    	            if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
 			       
 			    end
-				if (ByteDelay==2) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
-				begin
-				    tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
-    	            if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-				end
-				if (ByteDelay==3) //On clock 3/4 update addresses 
+				//if (ByteDelay==4) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
+				//begin
+				    //tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
+    	            //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+				//end
+				if (ByteDelay==6) //On clock 3/4 update addresses 
 				begin
 				    v_data[11:0]<=ls_data_in[11:0];//0;//fglatch;				    
-				    tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
-    	            if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+				  //  tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
+    	          //  if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
 				end
 				
 			end
@@ -1593,6 +1709,10 @@ begin
 			   if (contention_flag) cpu_wait<=0; else cpu_wait<=1;
 			    if (ByteDelay2==0)
 			    begin
+			    
+			       //r_pal_latch<={4'b0000,p_data_in[11:8]};
+			       //gb_pal_latch<=p_data_in[7:0];
+			    
 			        ls_wren2<=0;
 			        ls_wren3<=0;
 			        fglatch<=ls_data_in2[11:0];
@@ -1615,19 +1735,24 @@ begin
                             h_char_counter2<=h_char_counter2+1;
                         end                         
 					end
-					else tilemap1_address_read<=tilemap1_address_write[12:1];
+					//else tilemap1_address_read<=tilemap1_address_write[12:1];
 			        
 			    end 
-			    if (ByteDelay2==1)
+			    if (ByteDelay2==2)
 			    begin
+			    
+			       //r_pal_latch<={4'b0000,p_data_in[11:8]};
+			       //gb_pal_latch<=p_data_in[7:0];
+			    
 			        ls_address2<=ls_address2+1;
+			        ls_address3<=ls_address3+1;
 			        p_address_read[7:0]<=v_data_in[7:0];
 			    end
-				if (ByteDelay2==2) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
-				begin
-			        ls_wren3<=1;
-				end
-				if (ByteDelay2==3) //On clock 3/4 update addresses 
+				//if (ByteDelay2==4) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
+			//	begin
+			     //   ls_wren3<=1;
+				//end
+				if (ByteDelay2==6) //On clock 3/4 update addresses 
 				begin
 			        if (p_address_read[7:0]==foregroundmask_index[7:0])   
 			        begin
@@ -1637,12 +1762,19 @@ begin
 			        begin
 			             ls_data_out3<=0;
 			        end
-			        ls_address3<=ls_address3+1;			        
+			       // ls_address3<=ls_address3+1;
+			       
+			       
+			        			        
 			        ls_data_out2[11:0]<=p_data_in[11:0];	//copy latched byte video out
 			        ls_wren2<=1;
-			        ls_wren3<=0;
+			        ls_wren3<=1;
 			        v_data2[11:0]<=fglatch;
+			        
+			        
 			        foregroundmask<=foregroundmask_latch;
+			        
+			        
 			        
 			        tile_count_h2<=tile_count_h2+1;
 			        if (tile_count_h2==0)
@@ -1654,7 +1786,7 @@ begin
 				    begin
 				        v_address<={tilemap1_data_latch[10:0],tile_count_v2,tile_count_h2};
 				        //tilemap0_address_read<=tilemap0_address_write[12:1];
-				        if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+				     //   if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
 				    end
 					
 					if (ByteWrapCounter2==639+20)
@@ -1663,17 +1795,100 @@ begin
 						//if (tile_count_v2==7) base_char_address2[11:0]<=base_char_address2[11:0]+64;
 						if (tile_count_v2==7) tile_row2<=tile_row2+1;
 					end
+					
+					//p_address_read<=p_address_write;
 
 				end
 			end
 		end
+		
+	/*if ((contention_flag) && (in_contention))  //handle contention on writes to video RAM
+	begin
+	   cpu_wait<=0;            //Halt CPU until contention event is over
+	   case (ByteDelay)
+	       3'd2:begin          //set video address
+	           if (write_wait) latched_address<=gfx_space_address; //set latch address for vid address port $FC
+	           if (tile_gfx_write_wait) latched_address<=tile_address; //set latch address for tle gfx port $DC
+	           if (sample_write_wait) latched_address<=sample_write_address+65536; //set latch address for sample port $9C
+	           write_latched<=0;       //flag that video_address should be set to latch
+	       end 
+	       3'd4:begin          //once address is valid on RAM set the write enable
+	           vid_we<=0;
+	       end
+	       3'd6:begin          //Once written turn off write and release address and remove contention flag
+	           vid_we<=1;
+	           write_latched<=1;
+	           contention_flag<=0;
+	       end
+	   endcase
+	end
+	else cpu_wait<=1;*/
+		
+	/*if ((mem_can_write) && ((write_wait) || (tile_write_wait) || (tile_gfx_write_wait) || (sample_write_wait)) && (write_latched==0) && (read_delay>0))
+	begin
+	   read_delay<=read_delay-1;
+	end
+	
+	if ((mem_can_write) && ((write_wait) || (tile_write_wait) || (tile_gfx_write_wait) || (sample_write_wait)) && (write_latched==0) && (read_delay==2))
+	begin
+	   vid_we<=0;
+	end
+	
+	if ((mem_can_write) && ((write_wait) || (tile_write_wait) || (tile_gfx_write_wait) || (sample_write_wait)) && (write_latched==0) && (read_delay==0))
+	//if ((mem_can_write) && ((write_wait) || (tile_write_wait) || (tile_gfx_write_wait) ) && (write_latched==0))
+	begin
+		vid_we<=1;
+		write_wait<=0;
+		tile_write_wait<=0;
+		tile_gfx_write_wait<=0;
+		sample_write_wait<=0;
+		//read_delay<=1;
+	end //else vid_we<=1;
 
+	if ((mem_can_latch) && (write_wait) && (write_latched))
+	begin
+		//write_latched<=0;
+		latched_address<=gfx_space_address;
+		//vid_we<=0;
+		write_wait<=0;
+		read_delay<=4;
+	end 
+	
+	if ((mem_can_latch) && (tile_gfx_write_wait) && (write_latched))
+	begin
+		write_latched<=0;
+		latched_address<=tile_address;//+TILEGFX_OFFSET;
+		//vid_we<=0;
+		//tile_gfx_write_wait<=0;
+		read_delay<=4;
+	end
+
+	if ((mem_can_latch) && (sample_write_wait) && (write_latched))
+	begin
+		write_latched<=0;
+		latched_address<=sample_write_address+65536;
+		//vid_we<=0;
+		//sample_write_wait<=0;
+		read_delay<=4;
+	end*/
+	
+	if (read_delay>0) read_delay<=read_delay-1;
+	
+	if (read_delay==1)
+	begin
+	   read_delay<=0;
+	   write_wait<=0;
+	   sample_write_wait<=0;
+	   tile_gfx_write_wait<=0;
+	end
+	
 	if ((mem_can_latch) && (write_wait) && (write_latched))
 	begin
 		write_latched<=0;
 		latched_address<=gfx_space_address;
 		vid_we<=0;
-		write_wait<=0;
+		//write_wait<=0;
+		read_delay<=2;
 	end 
 	
 	if ((mem_can_latch) && (tile_gfx_write_wait) && (write_latched))
@@ -1681,7 +1896,8 @@ begin
 		write_latched<=0;
 		latched_address<=tile_address;//+TILEGFX_OFFSET;
 		vid_we<=0;
-		tile_gfx_write_wait<=0;
+		//tile_gfx_write_wait<=0;
+		read_delay<=2;
 	end
 
 	if ((mem_can_latch) && (sample_write_wait) && (write_latched))
@@ -1689,16 +1905,20 @@ begin
 		write_latched<=0;
 		latched_address<=sample_write_address+65536;
 		vid_we<=0;
-		sample_write_wait<=0;
+		//sample_write_wait<=0;
+		read_delay<=2;
 	end
+
 	
 end
 
 
+//******************  VIDEO MODE 1 *************************
+
 if (vid_mode==1)
 begin
 
-    if (cpu_wait)
+   if (cpu_wait)
     begin
 	   mem_can_write<=1;	//assume we can write to memory unless we set flag otherwise
 	   mem_can_latch<=1;
@@ -1708,19 +1928,36 @@ begin
 	   mem_can_write<=0;	//assume we can write to memory unless we set flag otherwise
 	   mem_can_latch<=0;
 	end
+	
+/*	r_pal_latch<={4'b0000,p_data_in2[11:8]};
+	gb_pal_latch<=p_data_in2[7:0];
+	tile0_latch<=tilemap0_data_in2;
+	tile1_latch<=tilemap1_data_in2;
+	*/   
+	
+	if ((write_wait==0) && (tile_gfx_write_wait==0) && (write_latched==0) && (sample_write_wait==0))
+	begin
+	  write_latched<=1;
+	  contention_flag<=0;
+	  vid_we<=1;
+	end
 	   
 	
 	//if ((write_wait==0) && (tile_write_wait==0) && (tile_gfx_write_wait==0) && (write_latched==0) && (tile_read_wait==0))
-	if ((write_wait==0) && (tile_write_wait==0) && (tile_col_write_wait==0) && (tile_gfx_write_wait==0) && (write_latched==0) && (sample_write_wait==0))
+//	if ((write_wait==0) && (tile_write_wait==0) && (tile_col_write_wait==0) && (tile_gfx_write_wait==0) && (write_latched==0) && (sample_write_wait==0))
 	//if ((write_wait==0) && (tile_write_wait==0) && (tile_col_write_wait==0) && (tile_gfx_write_wait==0) && (write_latched==0) && (tile_read_wait==0))
-	begin
+//	begin
 	  // if (read_delay==0) write_latched<=1; else read_delay<=read_delay+1;
-	  write_latched<=1;
-	  contention_flag<=0;
+//	  write_latched<=1;
+	//  contention_flag<=0;
+	  //vid_we<=1;
+	//end
+	
+	
+	if (ByteRead==0)   //Manage Video Ram Contention prior to screen drawing
+	begin
+	   if ((CounterX>=VID1POS-4) && (CounterY<480) && (contention_flag)) cpu_wait<=0; else cpu_wait<=1;	
 	end
-	
-	
-	
 
 		
 	if (vga_v_sync==0)
@@ -1749,6 +1986,7 @@ begin
 	else	
 		if (ByteRead)
 			begin
+			if ((scanlines==1) && (contention_flag)) cpu_wait<=0; else cpu_wait<=1;
 				//vid_we<=1;
 				if(ByteDelay==0) //on clock 1/4 get data byte from memory
 					begin
@@ -1767,7 +2005,8 @@ begin
 							end
 						else
 						    begin
-								if (ls_address>1) p_address_read[7:0]<=ls_data_in[7:0]; //if even scanline read the data byte from internal temp memory
+								//if (ls_address>1) 
+								p_address_read[7:0]<=ls_data_in[7:0]; //if even scanline read the data byte from internal temp memory
 							end								
 					end  //end clock 1/4
 					//else
@@ -1778,7 +2017,7 @@ begin
 					//		write_wait<=0;
 					//	end else vid_we<=1;
 					//end
-				if (ByteDelay==1) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
+				if (ByteDelay==2) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
 					begin
 					
 					  ls_wren<=0; //turn off the internal memory write reg (as it is written to on clock 1)
@@ -1792,7 +2031,7 @@ begin
 							//vid_we<=0;	//write data to mem
 					//	end
 					end
-				if (ByteDelay==2) //clock 3/4, we increase all the relevant addresses
+				if (ByteDelay==4) //clock 3/4, we increase all the relevant addresses
 					begin
 					    //ls_wren<=0;
 						//if (scanlines) ls_wren<=1;
@@ -1814,7 +2053,7 @@ begin
 	//						cpu_wait<=0;
 						end
 					end
-				if (ByteDelay==3)
+				if (ByteDelay==6)
 				begin
 				    //ls_wren<=0;
 				    //ls_address<=ls_address+1;
@@ -1840,11 +2079,11 @@ begin
 	            end
 	            if (CounterX==VID1POS-3)
 	            begin
-	               if (scanlines==0) p_address_read[7:0]<=ls_data_in[7:0]; else p_address_read[7:0]<=0;
+	             //  if (scanlines==0) p_address_read[7:0]<=ls_data_in[7:0]; else p_address_read[7:0]<=0;
 	            end
 	            if (CounterX==VID1POS-2)
 	            begin
-	               if (scanlines==0) ls_address<=1; //as we read 1 byte ahead we need to offset temp memory address when writing the data
+	         //      if (scanlines==0) ls_address<=1; //as we read 1 byte ahead we need to offset temp memory address when writing the data
 	            end
 
 				
@@ -1853,36 +2092,41 @@ begin
 			end
 					
 
+	if (read_delay>0) read_delay<=read_delay-1;
 	
-	
-	
-	if ((mem_can_write) && ((write_wait) || (tile_write_wait) || (tile_gfx_write_wait) || (sample_write_wait)) && (write_latched==0))
-	//if ((mem_can_write) && ((write_wait) || (tile_write_wait) || (tile_gfx_write_wait) ) && (write_latched==0))
+	if (read_delay==1)
 	begin
-		vid_we<=0;
-		write_wait<=0;
-		tile_write_wait<=0;
-		tile_gfx_write_wait<=0;
-		sample_write_wait<=0;
-		//read_delay<=1;
-	end else vid_we<=1;
-	
-	
+	   read_delay<=0;
+	   write_wait<=0;
+	   sample_write_wait<=0;
+	   tile_gfx_write_wait<=0;
+	end
 	
 	if ((mem_can_latch) && (write_wait) && (write_latched))
 	begin
 		write_latched<=0;
 		latched_address<=gfx_space_address;
-		//read_delay<=3;
+		vid_we<=0;
+		//write_wait<=0;
+		read_delay<=2;
 	end 
 	
-	
-	
+	if ((mem_can_latch) && (tile_gfx_write_wait) && (write_latched))
+	begin
+		write_latched<=0;
+		latched_address<=tile_address;//+TILEGFX_OFFSET;
+		vid_we<=0;
+		//tile_gfx_write_wait<=0;
+		read_delay<=2;
+	end
+
 	if ((mem_can_latch) && (sample_write_wait) && (write_latched))
 	begin
 		write_latched<=0;
 		latched_address<=sample_write_address+65536;
-		//read_delay<=3;
+		vid_we<=0;
+		//sample_write_wait<=0;
+		read_delay<=2;
 	end
 	
 	
@@ -1893,7 +2137,8 @@ end
 //******************  VIDEO MODE 2 *************************
 if (vid_mode==2)
 begin
-    if (cpu_wait)//(contention_flag==0)
+v_address<=gfx_space_address;
+if (cpu_wait)
     begin
 	   mem_can_write<=1;	//assume we can write to memory unless we set flag otherwise
 	   mem_can_latch<=1;
@@ -1903,9 +2148,22 @@ begin
 	   mem_can_write<=0;	//assume we can write to memory unless we set flag otherwise
 	   mem_can_latch<=0;
 	end
-	   
 	
-	if ((write_wait==0) && (tile_write_wait==0) && (tile_col_write_wait==0) && (tile_gfx_write_wait==0) && (write_latched==0) && (sample_write_wait==0))
+	if ((write_wait==0) && (tile_gfx_write_wait==0) && (write_latched==0) && (sample_write_wait==0))
+	begin
+	  write_latched<=1;
+	  contention_flag<=0;
+	  vid_we<=1;
+	end
+
+	   
+	   
+	//r_pal_latch<={4'b0000,p_data_in2[11:8]};
+	//gb_pal_latch<=p_data_in2[7:0];
+	tile0_latch<=tilemap0_data_in2;
+	tile1_latch<=tilemap1_data_in2;
+	
+	if ((write_wait==0) && (tile_gfx_write_wait==0) && (write_latched==0) && (sample_write_wait==0))
 	begin
 	  write_latched<=1;
 	  contention_flag<=0;
@@ -1921,14 +2179,14 @@ begin
 
 	if (ByteRead==0)
 	begin
-	   if ((CounterX<VID2POS-8) || (CounterY>=480))
-	   begin
-	       tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];          //this allows us to read the current 'write' address when
-	       tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];      //there is no screen drawing so that we can service a getchar IO req
-	       if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-	       if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+	   //if ((CounterX<VID2POS-8) || (CounterY>=480))
+	   //begin
+	       //tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];          //this allows us to read the current 'write' address when
+	       //tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];      //there is no screen drawing so that we can service a getchar IO req
+	       //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+	       //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
 	       
-	   end
+	   //end
 	
 	    if ((CounterX==VID2POS-5) && (CounterY<480)) //We need to pre-load first character byte	
 		begin
@@ -1969,7 +2227,8 @@ begin
 		
 	if (ByteRead)
 	begin	
-		if(ByteDelay[0:0]==1'b0) //on clock 1/4 get data byte from memory
+	    //if (contention_flag) cpu_wait<=0; else cpu_wait<=1;
+		if(ByteDelay[1:0]==2'b00) //on clock 1/4 get data byte from memory
 			begin
 	           v_data<=character[7]?foreground_colour:background_colour;
 	           character<={character[6:0],1'b0};
@@ -1982,7 +2241,7 @@ begin
 			   end
 	       	end
 					
-			if (ByteDelay[0:0]==1'b1) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
+			if (ByteDelay[1:0]==2'b10) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
 		 	begin
 				case (tile_count_h)
 			        0: begin
@@ -2005,22 +2264,22 @@ begin
 				        if (vid2_char_address[0]) p_address_read<=tilemap1_data_in[15:8]; else p_address_read<=tilemap1_data_in[7:0];
 				        //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
 	                    //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
-	                    tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];          //this allows us to read the current 'write' address when
-	                    tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];      //there is no screen drawing so that we can service a getchar IO req
+	                //    tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];          //this allows us to read the current 'write' address when
+	               //     tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];      //there is no screen drawing so that we can service a getchar IO req
 				     end
-					5: begin
-					   if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-	                   if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
-					end
+					//5: begin
+					  // if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+	                   //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+					//end
 					6: begin
 					   fglatch<=p_data_in[11:0];
-					   if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-	                   if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+					  // if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+	                   //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
 					end
-					7: begin
-					   if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-	                   if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
-					end
+					//7: begin
+					//   if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+	                 //  if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+					//end
 				endcase
 				
 				tile_count_h<=tile_count_h+1;
@@ -2036,26 +2295,42 @@ begin
 			end
 		end
 	
+	
+	if (read_delay>0) read_delay<=read_delay-1;
+	
+	if (read_delay==1)
+	begin
+	   read_delay<=0;
+	   write_wait<=0;
+	   sample_write_wait<=0;
+	   tile_gfx_write_wait<=0;
+	end
+		
 	if ((mem_can_latch) && (write_wait) && (write_latched))
 	begin
 		write_latched<=0;
 		latched_address<=gfx_space_address;
 		vid_we<=0;
-		write_wait<=0;
+		//write_wait<=0;
+		read_delay<=2;
 	end 
 	
 	if ((mem_can_latch) && (tile_gfx_write_wait) && (write_latched))
 	begin
 		write_latched<=0;
-		latched_address<=tile_address+TILEGFX_OFFSET;
+		latched_address<=tile_address;//+TILEGFX_OFFSET;
 		vid_we<=0;
-		tile_gfx_write_wait<=0;
+		//tile_gfx_write_wait<=0;
+		read_delay<=2;
 	end
-	
+
 	if ((mem_can_latch) && (sample_write_wait) && (write_latched))
 	begin
 		write_latched<=0;
 		latched_address<=sample_write_address+65536;
+		vid_we<=0;
+		///sample_write_wait<=0;
+		read_delay<=2;
 	end
 end
 
@@ -2073,6 +2348,11 @@ begin
 	   mem_can_write<=0;	//assume we can write to memory unless we set flag otherwise
 	   mem_can_latch<=0;
 	end
+	
+	r_pal_latch<={4'b0000,p_data_in2[11:8]};
+	gb_pal_latch<=p_data_in2[7:0];
+	tile0_latch<=tilemap0_data_in2;
+	tile1_latch<=tilemap1_data_in2;
 	   
 	
 	if ((write_wait==0) && (tile_gfx_write_wait==0) && (write_latched==0) && (sample_write_wait==0))
@@ -2084,7 +2364,8 @@ begin
 	
 	if ((ByteRead==0) && (ByteRead2==0))   //Manage Video Ram Contention prior to screen drawing
 	begin
-	   if ((CounterX>=780-8) && (CounterY<480) && (contention_flag)) cpu_wait<=0; else cpu_wait<=1;	
+	   //if ((CounterX>=780-8) && (CounterY<480) && (contention_flag)) cpu_wait<=0; else cpu_wait<=1;
+	   if ((CounterX>=780-8) && (contention_flag) && ((CounterY<480) || (CounterY>(VID03YPOS-2)))   ) cpu_wait<=0; else cpu_wait<=1;	
 	end
 	
 	
@@ -2092,6 +2373,11 @@ begin
 
 	if (ByteRead==0)
 	begin	
+	
+	//       p_address_read<=p_address_write;
+	       //r_pal_latch<={4'b0000,p_data_in[11:8]};
+		  // gb_pal_latch<=p_data_in[7:0];
+	
 			if ((CounterX==780-8) && (CounterY<480)) //We need to pre-load first character byte
 			begin
 				tilemap0_address_read<=base_char_address[11:0];
@@ -2104,11 +2390,11 @@ begin
 				tilemap0_data_latch<=tilemap0_data_in[11:0];
 				tilemap0_pal_latch<=tilemap0_data_in[15:12];
 			end
-			if (CounterX==780-5)// && (CounterY<480)) 
-			begin
-			     tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];			             
+			//if (CounterX==780-5)// && (CounterY<480)) 
+			//begin
+			  //   tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];			             
 			     //p_address_read[7:0]<={tilemap0_data_in[15:12],v_data_in[7:4]};
-			end
+			//end
 			/*if ((CounterX==780-4) && (CounterY<480))
 			begin
 			     p_address_read<={tilemap0_pal_latch,v_data_in[3:0]};
@@ -2117,25 +2403,26 @@ begin
 			begin
 			     v_data<=p_data_in;
 			end*/
-			if (CounterX>=780-3) //&& (CounterY<480)) 
-			begin
-			     if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-			end
-			if (scanlines) ls_address<=0; else ls_address<=1;
+			//if (CounterX>=780-3) //&& (CounterY<480)) 
+			//begin
+			  //   if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+			//end
+			//if (scanlines) ls_address<=0; else ls_address<=1;
+			ls_address<=0;
 			v_data<=0;  //clear v_data to zero outside of display
 			tile_count_h<=1;			
-			if ((CounterX<780-8) || ((CounterY>=480) && (CounterY<=(VID03YPOS-2))))
-			begin
+			//if ((CounterX<780-8) || ((CounterY>=480) && (CounterY<=(VID03YPOS-2))))
+			//begin
 			   //v_data <= 0;  //clear v_data to zero outside of display
-			   tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];
-	           if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-	        end
+			  // tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];
+	           //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+	        //end
 			
 			if ((CounterX==780-9) && (scanlines))
 			begin
 		      h_scroll_pos<=h_scroll_pos_latch;
 		      //v_scroll_pos<=v_scroll_pos_latch;
-		      h_read_offset<=(374+24)-h_scroll_pos_latch[2:0];  //this controls the timing for h scroll
+		      h_read_offset<=(374+25)-h_scroll_pos_latch[2:0];  //this controls the timing for h scroll
 		      h_char_counter<=(h_scroll_pos_latch[8:3]);		      
 		      base_char_address[11:0]<=((v_scroll_pos[8:3]+tile_row)<<6)+h_scroll_pos_latch[8:3];     		      
 		    end
@@ -2156,36 +2443,38 @@ begin
 				tilemap1_data_latch<=tilemap1_data_in[11:0];
 				tilemap1_pal_latch<=tilemap1_data_in[15:12];
 			end
-			if (CounterX==780-1) 
-			begin
-			     tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];			             
+			//if (CounterX==780-1) 
+			//begin
+			  //   tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];			             
 			     //p_address_read[7:0]<={tilemap0_data_in[15:12],v_data_in[7:4]};
-			end
+			//end
 			/*if ((CounterX==780-4) && ((CounterY<480) || (CounterY>521))) //We need to pre-load first character byte
 			begin
 			     p_address_read<={tilemap1_pal_latch,v_data_in[3:0]};			             			     
 			end*/
 			
-			if (CounterX>=780) 
-			begin
-			     if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
-			end
+			//if (CounterX>=780) 
+			//begin
+			  //   if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+			//end
 			//if (scanlines) ls_address2<=0; else 
-			ls_address2<=0;
+			if (scanlines) ls_address2<=0; else ls_address2<=1;
+			//ls_address2<=0;      //fed to video on odd scanlines (top layer - foreground)
 			if (scanlines) ls_address3<=0; else ls_address3<=1;
+			//ls_address3<=0;     //address to read foreground mask information 
 			v_data2 <= 0;  //clear v_data to zero outside of display
 			tile_count_h2<=1;			
-			if ((CounterX<780-4) || ((CounterY>=480) && (CounterY<=(VID03YPOS-2))))
-			begin
-			   tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
-	           if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
-	        end
+			//if ((CounterX<780-4) || ((CounterY>=480) && (CounterY<=(VID03YPOS-2))))
+			//begin
+			  // tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
+	           //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+	        //end
 			
 			if ((CounterX==780-9) && (scanlines))
 			begin
 		      h_scroll_pos2<=h_scroll_pos2_latch;
 		      //v_scroll_pos2<=v_scroll_pos2_latch;
-		      h_read_offset2<=(373+24)-h_scroll_pos2_latch[2:0];  //this controls the timing for h scroll
+		      h_read_offset2<=(373+25)-h_scroll_pos2_latch[2:0];  //this controls the timing for h scroll
 		      h_char_counter2<=(h_scroll_pos2_latch[8:3]);		      
 		      base_char_address2[11:0]<=((v_scroll_pos2[8:3]+tile_row2)<<6)+h_scroll_pos2_latch[8:3];     		      
 		    end
@@ -2216,7 +2505,11 @@ begin
 			begin
 			    if (contention_flag) cpu_wait<=0; else cpu_wait<=1;
 			    if (ByteDelay==0)
-			    begin			        			        
+			    begin
+			    
+			     //   r_pal_latch<={4'b0000,p_data_in[11:8]};
+			     //  gb_pal_latch<=p_data_in[7:0];
+			    			        			        
 			        ls_wren<=0;
 			        if (tile_count_h==0)
 					begin
@@ -2233,22 +2526,26 @@ begin
                             h_char_counter<=h_char_counter+1;
                         end                         
 					end
-					else tilemap0_address_read<=tilemap0_address_write[12:1];
+					//else tilemap0_address_read<=tilemap0_address_write[12:1];
 					
 					
 			    end  
 			    
-			    if( ByteDelay==1)
+			    if( ByteDelay==2)
 			    begin
+			    
+			    //    r_pal_latch<={4'b0000,p_data_in[11:8]};
+			    //   gb_pal_latch<=p_data_in[7:0];
+			    
 			        ls_address<=ls_address+1;			    
 			        if (tile_count_h[0]==0) p_address_read<={tilemap0_pal_latch,v_data_in[3:0]}; else p_address_read<={tilemap0_pal_latch,v_data_in[7:4]};
 			    end
 			    
-			    if (ByteDelay==2)
+			    if (ByteDelay==4)
 			    begin
 			    end
 			    
-			    if (ByteDelay==3)
+			    if (ByteDelay==6)
 			    begin
 			        v_data[11:0]<=p_data_in[11:0];	//copy latched byte video out
 			        ls_data_out[11:0]<=p_data_in[11:0];	//copy latched byte video out
@@ -2266,7 +2563,7 @@ begin
 				    begin
 				        v_address<={tilemap0_data_latch,tile_count_v,tile_count_h[2:1]};
 				        //tilemap0_address_read<=tilemap0_address_write[12:1];
-				        if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+				      //  if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
 				    end
 					
 					if (ByteWrapCounter==639+20)
@@ -2274,38 +2571,40 @@ begin
 						tile_count_v<=tile_count_v+1;
 						if (tile_count_v==7) tile_row<=tile_row+1;
 					end
+					
+					//p_address_read<=p_address_write;
 			    end	
 			end
 			
 			
-			if (ByteRead2)
+			if (ByteRead2)           //top tile layer
 			begin		   
-			    if (ByteDelay2==0)
-			    begin
-			       tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
-    	           if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
-			    end  
+			    //if (ByteDelay2==0)
+			    //begin
+			       //tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
+    	           //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+			    //end  
 			    
-			    if( ByteDelay2==1)
+			    if( ByteDelay2==2)
 			    begin
-			        ls_address2<=ls_address2+1;
-			        ls_address3<=ls_address3+1;
-			        tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
-    	           if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+			        ls_address2<=ls_address2+1;      //address to read video data from
+			        ls_address3<=ls_address3+1;      //address read store mask info from
+			       // tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
+    	          // if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
 			    end
 			    
-			    if (ByteDelay2==2)
-			    begin	               
-			       tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
-    	           if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
-			    end
+			    //if (ByteDelay2==4)
+			    //begin	               
+			       //tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
+    	           //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+			    //end
 			    
-			    if (ByteDelay2==3)
+			    if (ByteDelay2==6)
 			    begin
-					v_data2[11:0]<=ls_data_in2[11:0];//0;//fglatch;	
-					foregroundmask<=ls_data_in3;
-		            tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
-    	            if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];			
+					v_data2[11:0]<=ls_data_in2[11:0];//0;//fglatch;	  //set video out from ls_address2
+					foregroundmask<=ls_data_in3;                      //set mask status from ls_address3
+		            //tilemap1_address_read[11:0]<=tilemap1_address_write[12:1];
+    	            //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];			
 			    end
 			end
 		end
@@ -2313,28 +2612,28 @@ begin
 		begin
 			if (ByteRead) 
 			begin	
-			    if (ByteDelay==0)
-			    begin
-			        tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
-    	            if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-			    end 
-			    if (ByteDelay==1)
+			    //if (ByteDelay==0)
+			    //begin
+			        //tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
+    	            //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+			    //end 
+			    if (ByteDelay==2)
 			    begin
 			        ls_address<=ls_address+1;
-			        tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
-    	            if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+			        //tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
+    	            //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
 			       
 			    end
-				if (ByteDelay==2) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
-				begin
-				    tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
-    	            if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
-				end
-				if (ByteDelay==3) //On clock 3/4 update addresses 
+				//if (ByteDelay==4) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
+				//begin
+				    //tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
+    	            //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+				//end
+				if (ByteDelay==6) //On clock 3/4 update addresses 
 				begin
 				    v_data[11:0]<=ls_data_in[11:0];//0;//fglatch;				    
-				    tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
-    	            if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
+				    //tilemap0_address_read[11:0]<=tilemap0_address_write[12:1];	               
+    	            //if (tilemap0_address_write[0]) tile0_latch<=tilemap0_data_in[15:8]; else tile0_latch<=tilemap0_data_in[7:0];
 				end
 				
 			end
@@ -2343,10 +2642,14 @@ begin
 			   if (contention_flag) cpu_wait<=0; else cpu_wait<=1;
 			    if (ByteDelay2==0)
 			    begin
-			        ls_wren2<=0;
-			        ls_wren3<=0;
-			        fglatch<=ls_data_in2[11:0];
-			        foregroundmask_latch<=ls_data_in3;
+			       //p_address_read<=p_address_write;
+			       //r_pal_latch<={4'b0000,p_data_in[11:8]};
+			       //gb_pal_latch<=p_data_in[7:0];
+			    
+			        ls_wren2<=0;                             //turn off write to video store for top layer (foreground)
+			        ls_wren3<=0;                             //turn off write to mask store for top layer (foreground)
+			        fglatch<=ls_data_in2[11:0];              //set video latch to current value in ls_address2 
+			        foregroundmask_latch<=ls_data_in3;       //set mask latch to current value in ls_address3
 			        
 			        if (tile_count_h2==0)
 					begin
@@ -2363,12 +2666,17 @@ begin
                             h_char_counter2<=h_char_counter2+1;
                         end                         
 					end
-					else tilemap1_address_read<=tilemap1_address_write[12:1];
+					//else tilemap1_address_read<=tilemap1_address_write[12:1];
 			        
 			    end 
-			    if (ByteDelay2==1)
+			    if (ByteDelay2==2)
 			    begin
+			    
+			       //r_pal_latch<={4'b0000,p_data_in[11:8]};
+			       //gb_pal_latch<=p_data_in[7:0]; 
+			    
 			        ls_address2<=ls_address2+1;
+			        ls_address3<=ls_address3+1;
 			        if (tile_count_h2[0]==0)
 			        begin
 			             p_address_read<={tilemap1_pal_latch,v_data_in[3:0]};
@@ -2377,12 +2685,15 @@ begin
 			        begin
 			             p_address_read<={tilemap1_pal_latch,v_data_in[7:4]};			             
 			        end
+			        
+			        
+			        
 			    end
-				if (ByteDelay2==2) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
-				begin
-				    ls_wren3<=1;
-				end
-				if (ByteDelay2==3) //On clock 3/4 update addresses 
+				//if (ByteDelay2==4) //On clock 2/4 read the palette entry into the video_data byte (fed to the rgb module)
+			//	begin
+				//    ls_wren3<=1;
+				//end
+				if (ByteDelay2==6) //On clock 3/4 update addresses 
 				begin
 				    //cpu_wait<=1;
 			        //ls_data_out2[12:0]<={foregroundmask_latch,p_data_in[11:0]};	//copy latched byte video out
@@ -2408,10 +2719,10 @@ begin
 			               ls_data_out3<=0;	//copy latched byte video out
 			           end
 			        end*/
-			        ls_address3<=ls_address3+1;
+			        //ls_address3<=ls_address3+1;
 			        ls_data_out2[11:0]<=p_data_in[11:0];
 			        ls_wren2<=1;
-			        ls_wren3<=0;
+			        ls_wren3<=1;
 			        v_data2[11:0]<=fglatch;
 			        foregroundmask<=foregroundmask_latch;
 			        
@@ -2428,7 +2739,7 @@ begin
 				    begin
 				        v_address<={tilemap1_data_latch,tile_count_v2,tile_count_h2[2:1]};
 				        //tilemap0_address_read<=tilemap0_address_write[12:1];
-				        if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
+				        //if (tilemap1_address_write[0]) tile1_latch<=tilemap1_data_in[15:8]; else tile1_latch<=tilemap1_data_in[7:0];
 				    end
 					
 					if (ByteWrapCounter2==639+20)
@@ -2437,17 +2748,31 @@ begin
 						//if (tile_count_v2==7) base_char_address2[11:0]<=base_char_address2[11:0]+64;
 						if (tile_count_v2==7) tile_row2<=tile_row2+1;
 					end
+					
+					//p_address_read<=p_address_write;
 
 				end
 			end
 		end
+		
+		
+	if (read_delay>0) read_delay<=read_delay-1;
+	
+	if (read_delay==1)
+	begin
+	   read_delay<=0;
+	   write_wait<=0;
+	   sample_write_wait<=0;
+	   tile_gfx_write_wait<=0;
+	end
 
 	if ((mem_can_latch) && (write_wait) && (write_latched))
 	begin
 		write_latched<=0;
 		latched_address<=gfx_space_address;
 		vid_we<=0;
-		write_wait<=0;
+		//write_wait<=0;
+		read_delay<=2;
 	end 
 	
 	if ((mem_can_latch) && (tile_gfx_write_wait) && (write_latched))
@@ -2455,7 +2780,8 @@ begin
 		write_latched<=0;
 		latched_address<=tile_address;//+TILEGFX_OFFSET;
 		vid_we<=0;
-		tile_gfx_write_wait<=0;
+		//tile_gfx_write_wait<=0;
+		read_delay<=2;
 	end
 
 	if ((mem_can_latch) && (sample_write_wait) && (write_latched))
@@ -2463,7 +2789,8 @@ begin
 		write_latched<=0;
 		latched_address<=sample_write_address+65536;
 		vid_we<=0;
-		sample_write_wait<=0;
+		//sample_write_wait<=0;
+		read_delay<=0;
 	end
 	
 end

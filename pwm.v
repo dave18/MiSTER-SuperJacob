@@ -22,6 +22,8 @@
 module pwm(
     input clk,
     input [15:0] pwm_in,
+	 input [15:0] ts_in_l,    
+    input [15:0] opl_in,
     input [15:0] dac_in,
     input [15:0] dac_in1,
     input [15:0] dac_in2,
@@ -34,11 +36,27 @@ module pwm(
 	 output wire [15:0] mixed
     );
     
+	 
+localparam SASIZE=19;
+    
+wire [SASIZE-1:0] Sadder;
+wire [SASIZE-1:0] Dadder_i;
+reg  [SASIZE-1:0] Dadder;
+reg  [SASIZE-1:0] Slatch;
 
-  wire [2:0] samples_playing=sample_playing3+sample_playing2+sample_playing1+sample_playing;    
+wire [2:0] samples_playing=sample_playing3+sample_playing2+sample_playing1+sample_playing;    
   
-  wire [18:0] mixer=(dac_in+dac_in1+dac_in2+dac_in3)/samples_playing;
-  assign mixed=mixer[15:0]+pwm_in;//pwm_in;//mixer[17:2];
+wire [18:0] mixer=(dac_in+dac_in1+dac_in2+dac_in3)/samples_playing;
+  
+reg [16:0] unsigned_opl;
+reg [16:0] unsigned_ay;
+ 
+wire [17:0] dac_sum = dac_in+dac_in1+dac_in2+dac_in3;
+
+wire [18:0] no_clip_mix=dac_in+dac_in1+dac_in2+dac_in3+pwm_in+unsigned_ay[15:0]+unsigned_opl[15:0];
+assign mixed=no_clip_mix[17:2];
+//assign mixed=mixer[15:0]+pwm_in+unsigned_ay+unsigned_opl;//pwm_in;//mixer[17:2];
+//assign mixed=dac_in+dac_in1+dac_in2+dac_in3+pwm_in+unsigned_ay[15:0]+unsigned_opl[15:0];//pwm_in;//mixer[17:2];
 /*    reg [16:0] pwm_accumulator;
     
      always @(posedge clk)
@@ -54,20 +72,22 @@ module pwm(
 
     assign pwm_out = pwm_accumulator[16];// & pwm_accumulator_dac[16] & pwm_accumulator_dac1[8] & pwm_accumulator_dac2[8] & pwm_accumulator_dac3[8];
 */    
-    
-wire [17:0] Sadder;
-wire [17:0] Dadder_i;
-reg  [17:0] Dadder;
-reg  [17:0] Slatch;
+  
 
 //tb uuttb();
 
-assign Dadder_i =(samples_playing)?((Slatch[17] << 17) | (Slatch[17] << 16) | (pwm_in+((dac_in+dac_in1+dac_in2+dac_in3)/samples_playing) )):((Slatch[17] << 17) | (Slatch[17] << 16) | (pwm_in+14'h2000));
+assign Dadder_i =(samples_playing)?((Slatch[SASIZE-1] << SASIZE-1) | (Slatch[SASIZE-1] << SASIZE-2)) + unsigned_ay+(pwm_in<<1)+unsigned_opl+dac_sum[17:2]:((Slatch[SASIZE-1] << SASIZE-1) | (Slatch[SASIZE-1] << SASIZE-2)) + unsigned_ay+(pwm_in<<1)+unsigned_opl+16'h8000;
 assign Sadder = Dadder + Slatch;
 
 initial begin
-	Slatch <= 18'h2000;
+	Slatch <= 19'h0;
 	pwm_out <= 1'b0;
+end
+
+always
+begin
+    unsigned_opl<=((opl_in*2)+16'h8000);
+    unsigned_ay<=(ts_in_l+16'h8000);
 end
 
 always@(posedge clk) begin// or posedge rst) begin
@@ -89,7 +109,7 @@ always@(posedge clk) begin// or posedge rst) begin
 	//begin
 
         Slatch <= Sadder;
-		pwm_out <= Slatch[17];
+		pwm_out <= Slatch[SASIZE-1];
 	//end
 end    
     

@@ -200,8 +200,10 @@
 		RAM2			equ RAM3+1
 		RAM1			equ RAM2+1
 		RAM0			equ RAM1+1
+		TOP_BANK		equ RAM0+1
+		RAM_BYTES		equ TOP_BANK+1
 		
-		DEBUG_HL		equ RAM0+1
+		DEBUG_HL		equ RAM_BYTES+4
 		DEBUG_DE		equ DEBUG_HL+2
 		DEBUG_BC		equ DEBUG_DE+2
 		DEBUG_AF		equ DEBUG_BC+2
@@ -376,6 +378,8 @@
 		jp CMD_JOY0
 	JCMD_JOY1					;$130
 		jp CMD_JOY1
+	JCMD_MEMTEST				;$133
+		jp CMD_MEMTEST
 		
 		org $0200
 		
@@ -634,22 +638,7 @@
 		jr int_return	
 	
 	start
-	
-	;	Quick memory test code
-	;	ld a,255
-	;	out (TILEMAP_COLOUR),a
-	;	ld a,0
-	;	out (TILEMAP_BG),a
-	;	ld a,'Z'
-	;	ld ($5000),a
-	;	ld a,0
-	;	ld a,($5000)
-	;	out (TILEMAP_ZERO),a
-	;	out (TILEMAP_WRITE),a
-	;poo
-	;	jp poo
-	
-	
+		
 		ld sp,ROMSIZE+8		;assume we at least have 8 bytes to call some init routines
 		
 		ld a,0
@@ -703,16 +692,11 @@
 		ld hl,testmemmessage
 		call WriteLine
 		
-		ld a,6
-		out (RAM_BANK_6),a
-		ld (RAM6),a
-		ld a,7
-		out (RAM_BANK_7),a
-		ld (RAM7),a
 	
-	;Now the memory is checked - currently only check the first 65536 bytes - need full 512k mem check.
-		ld de,$FFFF
-		ld a,$3f			;stop mem fill when $3fff is reached
+	;Now check to banks 2 & 3 as if these are faulty OS will fail
+	
+		ld de,$7FFF
+		ld a,$3F			;stop mem fill when $3fff is reached
 	RAMCHECK
 		LD	H,D			;Transfer the value in DE
 		LD	L,E			;(START = +FFFF, NEW = RAMTOP).
@@ -722,12 +706,16 @@
 		CP	H
 		JR	NZ,RAMFILL
 		
+		LD  A,$80
 	RAMREAD
-		AND	A			;Prepare for true subtraction.
-		SBC	HL,DE		;The carry flag will become
-		ADD	HL,DE		;reset when the top is reached.
+		;AND	A			;Prepare for true subtraction.
+		;SBC	HL,DE		;The carry flag will become
+		;ADD	HL,DE		;reset when the top is reached.
 		INC	HL			;Update the pointer.
-		JR	NC,RAMDONE	;Jump when at top.
+		;JR	NC,RAMDONE	
+		
+		CP  H
+		JR Z,RAMDONE	;Jump if reached address $8000
 		DEC	(HL)		;+02 goes to +01.
 		JR	Z,RAMDONE	;But if zero then RAM is faulty. Use current HL as top.
 		DEC	(HL)		;+01 goes to +00.
@@ -735,19 +723,109 @@
 	RAMDONE
 		DEC	HL			;HL points to the last actual location in working order.
 		
-		ld (ROMSIZE),hl
-
+		
+		ld a,$ff
+		ld (FORECOL),a	;need to reset colour var as memtest wipes it
 	
+		ld a,$7F
+		cp h
+		jr nz,ramerror
+		ld a,$FF
+		cp l
+		jr nz,ramerror
+		jr ramok
+	ramerror
+		ld hl,testmemmessage3
+		call WriteLine
+		jr ramnotok
+	ramok
+		ld hl,testmemmessage4
+		call WriteLine
+	ramnotok
+		ld hl,testmemmessage5
+		call WriteLine
+		
+	
+	
+	;new memory check for Super Jacob
+	;we will page in each bank into bank 7 and write a 0 to mem loc $FFFF
+	;then page in each bank and read the loc at $FFFF
+	;if it is 0 then we know it is a new bank (ie the address have not wrapped around)
+	;if it is not 0, then we know our address space has wrapped before bank 255 and we can record the highest bank number
+	;then write the bank number to $FFFF and read it back to make sure it is a valid location
+	
+		;ld a,$00
+		ld bc,$0077		;b=bank number, c=Bank 7 out port
+		;ld c,RAM_BANK_7
+		ld hl,$FFFF		;location to write to
+	zeroFFFF
+		out (c),b		;page in bank
+		ld (hl),$00
+		inc b
+		jr nz,zeroFFFF
+	checkFFFF
+		out (c),b		;page in bank
+		ld a,(hl)
+		and a
+		jr nz,last_bank_found
+		ld a,b
+		inc a
+		ld (hl),a
+		inc b
+		jr nz,checkFFFF
+		
+	last_bank_found
+		dec b
+		ld a,b
+		ld c,b
+		ld (TOP_BANK),a
+		
+		ld hl,testmemmessage2
+		call WriteString
+		call OutHex8
+		call EndLine
+	
+		ld a,6
+		out (RAM_BANK_6),a
+		ld (RAM6),a
+		ld a,7
+		out (RAM_BANK_7),a
+		ld (RAM7),a
+		
+	
+		
 		
 		;ld sp,hl		;changed as we want to be able to page memory
 		ld sp,ENDVARS+$100	;instead we'll create a 256 byte stack after all the system vars
 		
-		call clearspriteattr	;clear all sprite attributes to disable them and any linkig info
+		call EndLine
 		
-		call flushkeys
 		
-		ld a,$ff
-		ld (FORECOL),a
+		;     DEHL is a 32 bit factor
+		;     A is an 8 bit factor
+		ld de,$2000
+		ld hl,$0000
+		ld a,(TOP_BANK)
+		call DEHL_Times_A3
+		
+		;AHLDE is the 40-bit result
+		ld bc,$2000		;because TOP_BANK is number of bank-1, we need to add an additional 8k
+;		ex de,hl		;we can increase a before multiplication as it is possible to have 256 banks
+		add hl,bc
+;		ex de,hl
+		jr nc,byte_calc_done
+;		inc hl
+		inc de
+	byte_calc_done
+	
+		ld (RAM_BYTES),hl
+		ld (RAM_BYTES+2),de
+		
+		
+		
+		call clearspriteattr	;clear all sprite attributes to disable them and any linking info
+		
+		call flushkeys		
 		
 		call setpalette
 		
@@ -755,7 +833,7 @@
 		;ld a,0
 		;out (SCREEN_CTRL),a			;set to not show scanlines
 		
-	;	jp tempjump
+		
 		
 		ld hl,checkdrivesmessage
 		call WriteLine
@@ -870,10 +948,9 @@
 		;call DispAhex
 		;call EndLine
 		
-		call set_joy_a_normal
-		call set_joy_b_normal
-		;call set_joy_a_genesis
-		;call set_joy_b_genesis
+		;call set_joy_normal
+		call set_joy_a_genesis
+		call set_joy_b_genesis
 		jr c,I2C_Init_Error
 			
 		ld hl,i2cmessage2		;pointer to message
@@ -893,7 +970,7 @@
 	I2C_Init_End
 		call waitkey
 		;call SD_ReadDirectory
-	tempjump	
+		
 		;need to set as cleared by mem check
 		ld a,$0
 		ld (BACKCOL),a
@@ -919,16 +996,31 @@
 		;out (TILEMAP_X_VAL),a			;set x pos
 		;ld a,3				;y pos
 		;out (TILEMAP_Y_VAL),a			;set y pos
-		ld hl,(ROMSIZE)		;get ramtop
-		ld de,ROMSIZE		;need to subtract romsize
-		or a				;clear carry
-		sbc hl,de
-		inc hl				;adjust as top of RAM is last writeable byte so add 1 to make the actual number of bytes
-		call DispHL
-		out (TILEMAP_INC),a			;increase to next tile
-		;ld b,9				;5 characters in message
+	;	ld hl,(ROMSIZE)		;get ramtop
+	;	ld de,ROMSIZE		;need to subtract romsize
+	;	or a				;clear carry
+	;	sbc hl,de
+	;	inc hl				;adjust as top of RAM is last writeable byte so add 1 to make the actual number of bytes
+	;	call DispHL
+	
 		ld hl,welcome4		;pointer to message
+		call WriteString		;write message to screen 
+	
+		ld hl,(RAM_BYTES)
+		ld de,(RAM_BYTES+2)		
+		
+		call B2D32								;get a 32 bit string into B2DBUF
+		ld hl,B2DEND-10
+		call FormatNumber32
+		ld hl,NUMFORMATBUF
+		
+		call WriteString
+		
+		;out (TILEMAP_INC),a			;increase to next tile
+		;ld b,9				;5 characters in message	
+		ld hl,bytetotstring		;pointer to message
 		call WriteLine		;write message to screen 
+		
 		
 		ld hl,welcome5		;pointer to message
 		call WriteLine		;write message to screen 
@@ -1257,11 +1349,11 @@
 	
 	
 		
-	;	ld hl,sdmessage1		;pointer to message
-	;	call WriteLine	;write message to screen 
+		;ld hl,sdmessage1		;pointer to message
+		;call WriteLine	;write message to screen 
 		
-	;	ld hl,sdmessage2		;pointer to message
-	;	call WriteLine			;write message to screen
+		;ld hl,sdmessage2		;pointer to message
+		;call WriteLine			;write message to screen
 		
 	
 	
@@ -1275,8 +1367,8 @@
 		ld	ix,$0080			;clear any errors
 		call send_CMD
 		
-	;	ld hl,sdmessage4		;pointer to message
-	;	call WriteLine	;write message to screen
+		;ld hl,sdmessage4		;pointer to message
+		;call WriteLine	;write message to screen
 	
 	
 	
@@ -1289,8 +1381,8 @@
 		cp $01				;did we get idle response
 		jr nz,go_idle_loop
 		
-	;	ld hl,sdmessage5	;pointer to message
-	;	call WriteLine		;write message to screen
+		;ld hl,sdmessage5	;pointer to message
+		;call WriteLine		;write message to screen
 		
 			
 		;Check for compatible card
@@ -1304,8 +1396,8 @@
 	
 	
 		
-	;	ld hl,sdmessage3		;pointer to message
-	;	call WriteLine	;write message to screen
+		;ld hl,sdmessage3		;pointer to message
+		;call WriteLine	;write message to screen
 		
 		ld	a,SEND_IF_COND		;CMD 8
 		ld	hl,$0000			;ARGS
@@ -1329,8 +1421,8 @@
 		jr nz,duffcard
 		
 	
-	;	ld hl,sdmessage5	;pointer to message
-	;	call WriteLine		;write message to screen
+		;ld hl,sdmessage5	;pointer to message
+		;call WriteLine		;write message to screen
 		call get_sd_data			;return data into hlde
 		
 		
@@ -1367,8 +1459,8 @@
 		
 		
 		
-	;	ld hl,sdmessage7	;pointer to message
-	;	call WriteLine		;write message to screen
+		;ld hl,sdmessage7	;pointer to message
+		;call WriteLine		;write message to screen
 		
 	;	call flushspi
 		
@@ -1387,8 +1479,8 @@
 		
 	;SEND ACMD41
 		
-	;	ld hl,sdmessage8	;pointer to message
-	;	call WriteLine		;write message to screen
+		;ld hl,sdmessage8	;pointer to message
+		;call WriteLine		;write message to screen
 		
 		;call flushspi
 		
@@ -1421,8 +1513,8 @@
 	read_ocr_label
 		
 		
-	;	ld hl,sdmessage9	;pointer to message
-	;	call WriteLine		;write message to screen
+		;ld hl,sdmessage9	;pointer to message
+		;call WriteLine		;write message to screen
 	
 	;	call flushspi
 		
@@ -1437,9 +1529,9 @@
 	;	call WriteLine			;write message to screen
 		
 		call checksdresponse
-	;	push af
-	;	call DispA
-	;	pop af
+		;push af
+		;call DispA
+		;pop af
 		jp c,start2
 		
 		cp 0			;status byte should be 0 now
@@ -1449,12 +1541,12 @@
 		ld a,h					;sd card type
 		and	$40			;get HC flag
 		ld (SDCARDINFO1),a
-	;	call DispA
+		;call DispA
 		
 		ld a,l			;key voltage range byte		
-	;	push af
-	;	call DispA
-	;	pop af
+		;push af
+		;call DispA
+		;pop af
 		and $fc			;3.0v to 3.6b (+/- 0.3v)
 		cp $fc
 		jp nz,duffcard
@@ -1462,8 +1554,8 @@
 		
 		
 		
-	;	ld hl,sdmessage10		;pointer to message
-	;	call WriteLine			;write message to screen
+		;ld hl,sdmessage10		;pointer to message
+		;call WriteLine			;write message to screen
 		
 	;set block length to 512 for non SDHC cards
 		ld a,(SDCARDINFO1)
@@ -1479,9 +1571,9 @@
 		call send_CMD
 		
 		call checksdresponse
-	;	push af
-	;	call DispA
-	;	pop af
+		push af
+		call DispA
+		pop af
 		jp c,start2
 		
 		;ld a,($30)
@@ -2893,7 +2985,7 @@
 		
 		
 	CMD_GETCHAR
-		call GetNextCmdChunk		;get x
+		call GetNextCmdChunk		;get the address to dump
 		ld de,CMDBUFFER2
 		ld a,(CMDBUFFER2)
 		sub 48
@@ -2901,7 +2993,7 @@
 		jp nc,CMD_Check_Num_Param_Syntax					;no valid parameter
 		call ConvStr16			;get value of dump address in HL
 		ld (TEMP16),hl
-		call GetNextCmdChunk		;get y
+		call GetNextCmdChunk		;get the address to dump
 		ld de,CMDBUFFER2
 		ld a,(CMDBUFFER2)
 		sub 48
@@ -3163,8 +3255,8 @@
 		call ConvStr16			;get value of dump address in HL
 		ld a,0
 		cp h
+		ld a,(TOP_BANK)
 		jr nz,CMD_BANK_RangeInvalid		;bank number is >255!!!!!!
-		ld a,63
 		cp l
 		jr c,CMD_BANK_RangeInvalid		;bank value is >63
 		;ok - all values are within range
@@ -3208,9 +3300,13 @@
 		call WriteLine
 		ret
 	CMD_BANK_RangeInvalid
+		ld c,a
 		call EndLine
 		ld hl,invbankvalerrmessage
-		call WriteLine
+		call WriteString
+		ld a,c
+		call DispA
+		call EndLine
 		ret
 		
 	CMD_SETLED2
@@ -3849,16 +3945,16 @@
 		ld a,0
 		out (SDCARD_ADDR),a  ;set addr to cmd
 	waitsdloop
-;		;temp - read debug registers
-;		in a,($3f)
-;		call DispA
-;		in a,($3e)
-;		call DispA
-;		in a,($3d)
-;		call DispA
-;		in a,($3c)
-;		call DispA
-;		call EndLine
+		;;temp - read debug registers
+		;in a,($3f)
+		;call DispA
+		;in a,($3e)
+		;call DispA
+		;in a,($3d)
+		;call DispA
+		;in a,($3c)
+		;call DispA
+		;call EndLine
 		in a,(SDCARD_READ)	;load status into latch
 		in a,(SDCARD_STATUS)	;read status registers		
 		;push af
@@ -4076,7 +4172,7 @@
 	clearspriteattr
 		ld a,$83					;and copy 1024 bytes (high byte bit 2 set) and flag attr copy using bit 7
 		out (DMA_LEN_HI),a
-		ld hl,$8000				;as this is called after memory test this location contains zeroes
+		ld hl,$7B00				;as this is called after memory test this location contains zeroes
 		ld a,h
 		out (DMA_CPU_MD),a		;We want to copy from CPU memory location 0
 		ld a,l
@@ -4396,6 +4492,105 @@
 		defb "Error reading joystick A",0
 	joyerr2
 		defb "Error reading joystick B",0
+		
+	CMD_MEMTEST
+		di
+		call CMD_CLS
+		ld hl,memtest_message1
+		call WriteLine
+		call EndLine
+		ld hl,memtest_message2
+		call WriteLine
+		call EndLine
+		ld hl,memtest_message3
+		call WriteLine
+		ld bc,$0077;RAM_BANK_7
+		;ld a,$00
+		
+	CMD_MEMTEST_loop
+		ld a,$02				;skip banks 2 & 3
+		cp b
+		jr z,CMD_MEMTEST_skipbank
+		inc a
+		cp b
+		jr z,CMD_MEMTEST_skipbank
+		ld a,2
+		out (TILEMAP_Y_VAL),a
+		ld a,17
+		out (TILEMAP_X_VAL),a
+		push bc
+		out (c),b
+		ld c,b
+		call OutHex8
+		call CMD_MEMTEST_TESTIT
+		pop bc
+		jr c,CMD_MEMTEST_exit
+	CMD_MEMTEST_skipbank
+		ld a,(TOP_BANK)
+		cp b
+		jr z,CMD_MEMTEST_done
+		inc b
+		jr z,CMD_MEMTEST_done
+		jr CMD_MEMTEST_loop
+	CMD_MEMTEST_done
+		call EndLine
+		ld hl,memtest_message5
+		call WriteLine
+	CMD_MEMTEST_exit
+		ld a,7
+		out (RAM_BANK_7),a
+	
+		ei
+		ret
+		
+	CMD_MEMTEST_TESTIT
+		ld hl,$FFFF
+		ld a,$DF
+	CMD_MEMTEST_TESTIT_loop
+		ld (hl),$02
+		dec hl
+		cp h
+		jr z,CMD_MEMTEST_TESTIT_2
+		jr CMD_MEMTEST_TESTIT_loop
+	CMD_MEMTEST_TESTIT_2
+		
+	CMD_MEMTEST_TESTIT_2_loop
+		inc hl
+		ld a,4
+		out (TILEMAP_Y_VAL),a
+		ld a,17
+		out (TILEMAP_X_VAL),a
+		call DispHLhex
+		ld a,$00
+		cp h
+		jr z,CMD_MEMTEST_TESTIT_done
+		dec (hl)
+		jr z,CMD_MEMTEST_TESTIT_error
+		dec (hl)
+		jr nz,CMD_MEMTEST_TESTIT_error
+		jr CMD_MEMTEST_TESTIT_2_loop
+	CMD_MEMTEST_TESTIT_done
+		and a	;clear carry
+		ret
+		
+	CMD_MEMTEST_TESTIT_error
+		call EndLine
+		ld hl,memtest_message4
+		call WriteLine
+		scf
+		ret
+	
+	memtest_message1
+		defb "Testing all memory blocks except 2 & 3 (System OS)",0
+	memtest_message2
+		defb "Current bank ",0
+	memtest_message3
+		defb "Testing Address ",0		
+	memtest_message4
+		defb "MEMTEST ERROR!",0
+	memtest_message5
+		defb "Memory test passed successfully",0
+		
 		
 	ClearDisplay
 		ld a,0
@@ -5251,10 +5446,19 @@
 		defb	"VOL",0,LOW JCMD_VOL,HIGH JCMD_VOL
 		defb	"JOY0",0,LOW JCMD_JOY0,HIGH JCMD_JOY0
 		defb	"JOY1",0,LOW JCMD_JOY1,HIGH JCMD_JOY1
+		defb	"MEMTEST",0,LOW JCMD_MEMTEST,HIGH JCMD_MEMTEST
 		defb	0		;end of command table
 	
 	testmemmessage
 		defb	"Testing Memory",0
+	testmemmessage2
+		defb	"Valid memory banks $00-$",0
+	testmemmessage3
+		defb	"Error detected in OS memory banks (2 & 3) - System may be unstable",0
+	testmemmessage4
+		defb	"System OS RAM - memory banks 2 & 3 - OK",0
+	testmemmessage5
+		defb	"Run MEMTEST at command prompt to test all memory",0
 	checkdrivesmessage
 		defb	"Checking Drives",0
 	cmdnotfoundmessage
@@ -5270,9 +5474,9 @@
 	filetoobigmessage
 		defb	"File exceeds 65536 bytes",0
 	invbankerrmessage
-		defb	"Invalid bank number (valid range is 3 to 7)",0
+		defb	"Invalid bank number - valid range is 3 to 7",0
 	invbankvalerrmessage
-		defb	"Invalid bank value (valid range is 0 to 63)",0
+		defb	"Invalid bank value - valid range is 0 to ",0
 	invalidfilegmessage
 		defb	"Not a valid Super Jacob Executable",0
 	changevolerror
@@ -5300,9 +5504,9 @@
 	welcome2:
 		defb	"Douglas Computing Ltd.",0
 	welcome3:
-		defb	"Copyright 2018",0
+		defb	"Copyright 2018-2020",0
 	welcome4:
-		defb	"RAM Bytes",0
+		defb	"Available Memory ",0
 	welcome5:
 		defb	"Ready",0
 		

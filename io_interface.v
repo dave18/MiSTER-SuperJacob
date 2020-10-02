@@ -24,9 +24,9 @@
 Outputs
 
 Hex NAME            Description
-FF  **** Not used ****
-FE  INT_EN_FLAG     Interrupt enable flags  [TMR2,TMR1,KEYBOARD,GOPIOB,GPIOA,HSYNC,RASTERLINE,VSYNC]
-FD  INT_DATA_BUS    Value that will be presented to the data bus upon interrupt
+FF  INT_DATA_BUS    Value that will be presented to the data bus upon interrupt
+FE  INT_EN_FLAG     Interrupt enable flags  [OPL Timers,Internal Timers,KEYBOARD,GOPIOB,GPIOA,HSYNC,RASTERLINE,VSYNC]
+FD  AY_REGISTER     Reserved for AY
 FC  VID_WRITE       Writes byte to current video address
 FB  VID_INC_ROW     Increases video address by 1 row (320 bytes)  (value written is irrelevant)
 FA  VID_INC         Increase video address by 1 byte  (value written is irrelevant)
@@ -35,7 +35,7 @@ F8  VID_ADDR_HI     Set MSB of video address
 F7  VID_ADDR_MD     Set bits 15 through 8 of video address
 F6  VID_ADDR_LO     Set bits 7 through 0 of video address
 F5  VID_ZERO        Zero video address
-F4  **** Not used ****
+F4  TMR_STATUS      IRQ xxxxx TMR2 TMR1
 F3  **** Not used ****
 F2  **** Not used ****
 F1  RASTER_HI       Writes high 2 bits of raster line interrupt
@@ -92,9 +92,9 @@ C2  LED_RED
 C1  LED_GREEN
 C0  LED_BLUE
 
-AF  SPRITE_WRITE_INC    Write byte to sprite memory and increase pointer
-AE  SPRITE_WRITE    Write byte to sprite memory 
-AD  **** Not used ****
+AF  SPRITE_WRITE_INC    Write byte to sprite memory and increase pointer (not sure this works!)
+AE  SPRITE_WRITE    Write byte to sprite memory and increase
+AD  **** not used ****
 AC  SPRITE_MASK     Set the colour index value for the sprite transparency mask
 AB  SPRITE_X_OFF    Set te sprite X offset position (where sprite position 0 is compared with physical screen)
 AA  SPRITE_Y_OFF    Set te sprite X offset position (where sprite position 0 is compared with physical screen)
@@ -106,7 +106,7 @@ A5  SPRITE_PAT     Set sprite attributes - bit 7 = mode, 6 through 0 = pattern. 
                                             Mode 1 = 4 bits colour, pattern = bits 6 through 0, lower 4 bits of pattern added to 4 high bits off palette offset
 A4  SPRITE_ATTR      bit 7 = y flip, 6 = x flip, Sprite palette offset for 4 bit mode [bits 0 through 3 only]
 A3  SPRITE_CHAIN    Set Sprite Chain [7:4] = Y chain. [3:0] = X chain
-A2  **** Not used ****
+A2  **** Not Used ****
 A1  SPRITE_VISIBLE  Set sprite either hidden or visible
 A0  SPRITE_SELECT   Selects which sprite all other sprite operations affect
 
@@ -148,7 +148,7 @@ A0  SPRITE_SELECT   Selects which sprite all other sprite operations affect
 7E  TMR1_LO         Timer 1 Low Byte and Start
 7D  TMR2_HI         Timer 2 High Byte
 7C  TMR2_LO         Timer 2 Low Byte and Start
-7B  TMR_CTRL        Timer Control - bit 1 = timer 2 restarts on 0, bit 0 timer 1 restarts on 0
+7B  TMR_CTRL        Timer Control - bit 7 - reset irq, bit 1 = timer 2 restarts on 0, bit 0 timer 1 restarts on 0
 
 78  ROM_OVERLAY     Rom select. 0 = RAM paged into 16k bank at address 0, any other value is ROM paged in
 77  RAM_BANK_7      Selects one of the 64 8k RAM bank paged into address $E000
@@ -159,6 +159,16 @@ A0  SPRITE_SELECT   Selects which sprite all other sprite operations affect
 72  RAM_BANK_2      Selects one of the 64 8k RAM bank paged into address $4000
 71  RAM_BANK_1      Selects one of the 64 8k RAM bank paged into address $2000
 70  RAM_BANK_0      Selects one of the 64 8k RAM bank paged into address $0000
+
+6F  SPRITE_CLIP_L   Sprite Left Clip Value
+6E  SPRITE_CLIP_R   Sprite Right Clip Value
+6D  SPRITE_CLIP_T   Sprite Top Clip Value
+6C  SPRITE_CLIP_B   Sprite Bottom Clip Value
+
+53 AY_DATA_WRITE     Select AY Register
+52 AY_REG_WRITE    Write to AY Register
+51 OPL_DATA_WRITE    Select OPL Register
+50 OPL_REG_WRITE   Write to OPL Register
 
 
 49  DMA_SPR_NO4     DMA Sprite gfx memory address  set to 4 bit sprite number
@@ -187,7 +197,10 @@ A0  SPRITE_SELECT   Selects which sprite all other sprite operations affect
 28  VIDEO_MODE      Sets the video mode
 27  FOREGROUND_EN   Enables the foreground layer in video mode 0    
 
+21  CLEAR_SPR_COL   Clear sprite collision flags and Interrupt
 20  SCREEN_CTRL     Screen Control  Bit 7 - screen enable, Bit 1 - Background enable, Bit 0 - Show scanlines (Foreground enable is reg 27)
+
+
 
 1c  **** Not used ****          (read only)
 1B  **** Not used ****          (read only)
@@ -235,6 +248,9 @@ DC  TILEMAP_READ       Reads the tile number at the current cursor positon (ie c
 D4  TILEMAP_READ_X     Get the current cursor column
 D3  TILEMAP_READ_Y     Get the current cursor row
 
+7B  TMR_STATUS      Timer Control - bit 1 = Timer B Flag, bit 0 Timer A Flag
+7A  GPIO_STATUS     GPIO Control  - bit 1 = GPIO B Flag, bit 0 GPIO A Flag
+
 39  I2C_READ        Read the data send from the I2C interface
 38  I2C_STATUS      Read the status byte from the I2C interface
 
@@ -242,6 +258,11 @@ D3  TILEMAP_READ_Y     Get the current cursor row
 32  SDCARD_WAITING  Read Data Waiting status of SD Card
 31  SDCARD_READY    Read ready status of SD card
 30  SDCARD_DATA     Read the last byte returned from the SD Card
+
+23  SPR_COL_X_HI    Sprite collision X pos high & flags (bit 7=foreground sprite/foreground collision) (bit 6=foreground sprite/background collision)  (bit 5=background sprite/background collision)
+22  SPR_COL_X_LO    Sprite collision X pos low
+21  SPR_COL_Y       Sprite collision Y pos
+20  SCREEN_REG      Read screen control register
 
 17  KEY_MATRIX_7    Read Keyboard byte 7 -  ,   .   / RCTL SPC  LT  DN  RT 
 16  KEY_MATRIX_6    Read Keyboard byte 6 - LCTL Z   X   C   V   B   N   M
@@ -264,16 +285,24 @@ module io_interface(
     input GPIOA_int_in,
     input GPIOB_int_in,
     input keyb_int_in,
+	 input opl_int_in,
+    input ay_int_in,
+	 input spr_int_in,
 //    input button_int_in,
     input io_m_in,
     input io_wait_in,
     input [7:0] io_data_in_from_cpu,
     input [7:0] io_data_in_from_ram,
+	 input [7:0] io_data_in_from_rgb,
+	 input [7:0] io_data_in_from_ay,
+    input [7:0] io_data_in_from_opl,
     input [7:0] io_data_in_from_sid,
     input [7:0] io_data_in_from_matrix,
     input [31:0] io_data_in_from_sdcard,
     input [9:0] CounterY,
-    input [15:0] adc_data_in,
+    //input [15:0] adc_data_in,
+	 input [7:0] adc_1_in,
+	 input [7:0] adc_2_in,
     input sysclk,
     input io_req,
     input io_wr,
@@ -284,6 +313,7 @@ module io_interface(
     input sd_ack,
 	 input [7:0] joy0,
 	 input [7:0] joy1,
+	 input [1:0] mem_option,
   //  input adc_enable,
     input adc_ready, 
     output wire led0_b,
@@ -299,9 +329,12 @@ module io_interface(
     output reg io_from_ram,
     output reg io_to_sprite,
     output reg io_to_rgb,
+	 output reg io_from_rgb,
     output reg io_to_sid,
     output reg io_to_sdcard,
-    output reg io_to_banking,
+    //output reg io_to_banking,
+	 output reg io_to_ay,
+    output reg io_to_opl,
     output reg io_sdcard_we,
     output reg io_from_matrix,     
     output reg sdcard_speed,
@@ -312,7 +345,11 @@ module io_interface(
     output reg [7:0] io_data_to_ram,
     output reg [7:0] io_data_to_rgb,
     output reg [7:0] io_data_to_sid,
-    output reg [5:0] io_data_to_banking,
+	 output reg  io_reg_to_ay,
+    output reg  io_reg_to_opl,
+    output reg [7:0] io_data_to_ay,
+    output reg [7:0] io_data_to_opl,
+    //output reg [5:0] io_data_to_banking,
     output reg [31:0] io_data_to_sdcard,
     output reg [1:0] io_addr_to_sdcard,
     output reg io_cyc_to_sdcard,
@@ -321,29 +358,47 @@ module io_interface(
     output reg [7:0] poty_latch,
     output reg i2c_write_ctrl,
     output reg [7:0] io_data_to_DMA,
-    output reg i2c_data_ack
+    output reg i2c_data_ack,
+	 output reg romsel,
+	 output reg [7:0] bank0,
+	 output reg [7:0] bank1,
+	 output reg [7:0] bank2,
+	 output reg [7:0] bank3,
+	 output reg [7:0] bank4,
+	 output reg [7:0] bank5,
+	 output reg [7:0] bank6,
+	 output reg [7:0] bank7
+
 	 //output reg [7:0] MCP23017_data_out,
 	 //output reg [7:0] MCP23017_status
     );
     
 wire [8:0]raster_line=CounterY[9:1]+1;
-reg [8:0] z80_int_timer;  //timer for how long to keep interrupt low
+//reg [8:0] z80_int_timer;  //timer for how long to keep interrupt low
 
-reg [9:0] timer_speed_control;  //controls how quickly the timers count down
+wire timer2_int_in=opl_int_in & ay_int_in;
+wire GPIO_int_in=GPIOA_int_in & GPIOB_int_in;
+
+reg [10:0] timer_speed_control;  //controls how quickly the timers count down
 
 //reg [15:0] io_address_in;
 //reg [7:0] io_data_in;
 		 
 //reg [15:0] io_address_out;
 
-reg int_ctrl;
+//reg int_ctrl;
 reg vsync_ctrl;
 reg hsync_ctrl;
 reg keyb_ctrl;
+reg tmr1_ctrl;
+reg tmr2_ctrl;
+reg spr_ctrl;
+reg gpio_ctrl;
 //reg button_ctrl;
 reg [31:0] i2c_ctrl;
 reg i2c_write_req;
 reg [7:0]int_status;
+reg [7:0]int_status_latch;
 reg [7:0]int_mask;
 reg [8:0]raster_int;
 reg [7:0]int_data_bus;
@@ -362,8 +417,8 @@ reg timer2_active;
 reg timer1_loop;
 reg timer2_loop;
 reg timer1_int;
-reg timer2_int;
 reg sd_ctrl;
+
 reg [7:0] MCP23017_data_out;
 reg [7:0] MCP23017_status;
 reg [7:0] MCP23017_addr;
@@ -371,6 +426,20 @@ reg [7:0] MCP23017_reg;
 reg [7:0] MCP23017_data;
 reg MCP23017_mode;
 
+reg [7:0] timer_status;
+
+reg [1:0] gpio_reg;
+
+//OPL Timers,Internal Timers,KEYBOARD,GOPIOB,GPIOA,HSYNC,RASTERLINE,VSYNC]
+reg snd_irq_flag;
+reg tmr_irq_flag;
+reg kbd_irq_flag;
+reg spr_irq_flag;
+reg ioa_irq_flag;
+reg hsc_irq_flag;
+reg ras_irq_flag;
+reg vsc_irq_flag;
+reg [2:0] clear_flags_next_cycle;
 
 assign io_address_out =  io_address_in; 
 //assign io_data_out = ((!io_wr) && (!io_req)) ? io_data_in:8'bZ; //if not writing tri-state
@@ -399,6 +468,8 @@ assign io_wait_out=io_wait_in;
     assign led0_r = !(pwm_count < shifted_data_r ? 1'b1 : 1'b0);
     assign led0_g = !(pwm_count < shifted_data_g ? 1'b1 : 1'b0);
     assign led0_b = !(pwm_count < shifted_data_b ? 1'b1 : 1'b0);
+	 
+	 wire [7:0]bank_data=(mem_option==2'h0)?{2'b00,io_data_in_from_cpu[5:0]}:(mem_option==2'h1)?{1'b0,io_data_in_from_cpu[6:0]}:io_data_in_from_cpu;
     
 
 
@@ -410,24 +481,34 @@ assign io_wait_out=io_wait_in;
 		   io_to_rgb<=1;
 		   io_to_sid<=0;
 		   io_to_sdcard<=0;
-		   io_to_banking<=1;
+		   //io_to_banking<=1;
 		   io_from_ram<=1;
+		   io_from_rgb<=1;
 		   io_from_matrix<=0;
 		   io_to_DMA<=1;
+		   io_to_ay<=1;
+		   io_to_opl<=1;
 		   io_sdcard_we<=0;
 		   z80_int<=1;		//keep high unless issuing interrupt
 		   io_data_to_ram<=8'bZ;	//start in hi impedence
 		   io_data_to_sprite<=8'bZ;
 		   io_data_to_rgb<=8'bZ;
 		   io_data_to_sid<=8'bZ;
-		   io_data_to_sdcard<=8'bZ;
-		   io_data_to_banking<=6'bz;
+		   io_data_to_sdcard<=32'bZ;
+		   //io_data_to_banking<=6'bz;
 		   io_data_to_DMA<=8'bz;
-		   int_ctrl<=0;
+		   io_data_to_ay<=8'bz;
+		   io_data_to_opl<=8'bz;
+		   io_reg_to_ay<=0;
+		   io_reg_to_opl<=0;
+		   //int_ctrl<=0;
 		   vsync_ctrl<=0;      //make sure we only issue a single interrupt for each vert blank
 		   hsync_ctrl<=0;      //make sure we only issue a single interrupt for each horiz blank
 		   keyb_ctrl<=0;
-		   z80_int_timer<=0;
+		   tmr1_ctrl<=0;
+		   tmr2_ctrl<=0;
+			spr_ctrl<=0;
+//		   z80_int_timer<=0;
 		   sdcard_speed<=0;
 		   i2c_write_req<=0;
 		   int_data_bus<=0;
@@ -445,10 +526,29 @@ assign io_wait_out=io_wait_in;
            timer2_active<=0;
            timer1_loop<=0;
            timer2_loop<=0;
-           timer1_int<=0;
-           timer2_int<=0;
+           timer1_int<=0;          
            i2c_data_ack<=0;
+           snd_irq_flag<=0;
+           tmr_irq_flag<=0;
+           kbd_irq_flag<=0;
+           spr_irq_flag<=0;
+           ioa_irq_flag<=0;
+            hsc_irq_flag<=0;
+           ras_irq_flag<=0;
+           vsc_irq_flag<=0;
+           clear_flags_next_cycle<=0;
+           int_mask<=8'h00;
 			  MCP23017_mode<=0;
+			  			romsel<=1;           //start with rom banked in
+			bank0<=0;
+			bank1<=1;
+			bank2<=2;
+			bank3<=3;
+			bank4<=4;
+			bank5<=5;
+			bank6<=6;
+			bank7<=7;
+
 	  end
 	  
 	always @ (posedge sysclk or negedge nReset)
@@ -460,24 +560,34 @@ assign io_wait_out=io_wait_in;
 		io_to_rgb<=1;
 		io_to_sid<=0;
 		io_to_sdcard<=0;
-		io_to_banking<=1;
+		//io_to_banking<=1;
 		io_from_ram<=1;
+		io_from_rgb<=1;
 		io_from_matrix<=0;
 		io_to_DMA<=1;
+		io_to_ay<=1;
+		io_to_opl<=1;
 		io_sdcard_we<=0;
 		z80_int<=1;		//keep high unless issuing interrupt
 		io_data_to_ram<=8'bZ;	//start in hi impedence
 		io_data_to_sprite<=8'bZ;
 		io_data_to_rgb<=8'bZ;
 		io_data_to_sid<=8'bZ;
-		io_data_to_sdcard<=8'bZ;
-		io_data_to_banking<=6'bz;
+		io_data_to_sdcard<=32'bZ;
+		//io_data_to_banking<=6'bz;
 		io_data_to_DMA<=8'bz;
-		int_ctrl<=0;
+		io_data_to_ay<=8'bz;
+		io_reg_to_ay<=0;
+		io_data_to_opl<=8'bz;
+		io_reg_to_opl<=0;
+		//int_ctrl<=0;
 		vsync_ctrl<=0;      //make sure we only issue a single interrupt for each vert blank
 		hsync_ctrl<=0;      //make sure we only issue a single interrupt for each horiz blank
 		keyb_ctrl<=0;
-		z80_int_timer<=0;
+		tmr1_ctrl<=0;
+		tmr2_ctrl<=0;
+		spr_ctrl<=0;
+//		z80_int_timer<=0;
 		sdcard_speed<=0;
 		i2c_write_req<=0;
 		int_data_bus<=0;
@@ -495,13 +605,46 @@ assign io_wait_out=io_wait_in;
         timer2_active<=0;
         timer1_loop<=0;
         timer2_loop<=0;
-        timer1_int<=0;
-        timer2_int<=0;
+        timer1_int<=0;        
         i2c_data_ack<=0;
+        snd_irq_flag<=0;
+        tmr_irq_flag<=0;
+        kbd_irq_flag<=0;
+        spr_irq_flag<=0;
+        ioa_irq_flag<=0;
+        hsc_irq_flag<=0;
+        ras_irq_flag<=0;
+        vsc_irq_flag<=0;
+        clear_flags_next_cycle<=0;
+        int_mask<=8'h00;
 		  MCP23017_mode<=0;
+		  			romsel<=1;           //start with rom banked in
+			bank0<=0;
+			bank1<=1;
+			bank2<=2;
+			bank3<=3;
+			bank4<=4;
+			bank5<=5;
+			bank6<=6;
+			bank7<=7;
+
     end     //-2
     else 
 	begin   //+2
+	   if (clear_flags_next_cycle>1) clear_flags_next_cycle<=clear_flags_next_cycle-1;
+	   if (clear_flags_next_cycle==1)
+	   begin
+	       snd_irq_flag<=snd_irq_flag & int_status_latch[7];   //reset flag if set on last read of interrupt
+           tmr_irq_flag<=tmr_irq_flag & int_status_latch[6];   //reset flag if set on last read of interrupt
+           kbd_irq_flag<=kbd_irq_flag & int_status_latch[5];   //reset flag if set on last read of interrupt
+           spr_irq_flag<=spr_irq_flag & int_status_latch[4];   //reset flag if set on last read of interrupt
+           ioa_irq_flag<=ioa_irq_flag & int_status_latch[3];   //reset flag if set on last read of interrupt
+           hsc_irq_flag<=hsc_irq_flag & int_status_latch[2];   //reset flag if set on last read of interrupt
+           ras_irq_flag<=ras_irq_flag & int_status_latch[1];   //reset flag if set on last read of interrupt
+           vsc_irq_flag<=vsc_irq_flag & int_status_latch[0];   //reset flag if set on last read of interrupt
+           clear_flags_next_cycle<=0;
+       end
+	
 	   if (io_data_in_from_i2c[28]) i2c_data_ack<=1; 
 	   timer_speed_control<=timer_speed_control+1;
 	   if (timer_speed_control==0)
@@ -511,6 +654,7 @@ assign io_wait_out=io_wait_in;
 	           timer1<=timer1-1;
 	           if (timer1==0)
 	           begin
+	               timer_status<=timer_status | 8'b10000001;
 	               timer1_int<=1;
 	               if (timer1_loop) timer1<=timer1_latch; else timer1_active<=0;
 	           end
@@ -520,12 +664,13 @@ assign io_wait_out=io_wait_in;
 	           timer2<=timer2-1;
 	           if (timer2==0)
 	           begin
-	               timer2_int<=1;
+	               timer_status<=timer_status | 8'b10000010;
+	               timer1_int<=1;
 	               if (timer2_loop) timer2<=timer2_latch; else timer2_active<=0;
 	           end
 	       end
 	   end
-	   case (pot_selectff)
+	   /*case (pot_selectff)
 	       0:begin
 	           poty_latch<=adc_data_in[15:8];
 	           adc_address_out <= 8'h14;
@@ -536,7 +681,9 @@ assign io_wait_out=io_wait_in;
 	       end
 	   endcase	   
 	   pot_selectff<=pot_selectff+1;
-	   
+	   */
+		potx_latch<=adc_1_in;
+		poty_latch<=adc_2_in;
 			//if ((io_req==0) && (io_wr==0)) io_to_ram<=0; else io_to_ram<=1;
 			//i2c_write_ctrl<=0;
 			
@@ -547,12 +694,23 @@ assign io_wait_out=io_wait_in;
 				begin   //+4
 				    casez (io_address_in[7:0])
 				    
+				    
+				       8'hff: begin     //Set value to be loaded onto data bus during interrupt
+				          int_data_bus<=io_data_in_from_cpu;
+				       end
+				    
 				       8'hfe: begin     //Interrupt enable flags
 				          int_mask<=io_data_in_from_cpu;
 				       end
 				       
-				       8'hfd: begin     //Set value to be loaded onto data bus during interrupt
-				          int_data_bus<=io_data_in_from_cpu;
+				       8'hfd: begin           //for compatibility for spectrum we will use 16 bit decoding here
+					      //if (io_address_in[15:8]==8'hff) io_reg_to_ay<=io_data_in_from_cpu[3:0];  //AY REG SELECT
+				          //if (io_address_in[15:8]==8'hbf)
+				          //begin
+				            io_reg_to_ay<=~io_address_in[14];
+				            io_data_to_ay<=io_data_in_from_cpu;     //AY DATA WRITE
+				            io_to_ay<=0;     //ay wr active low
+				         // end
 				       end
 				       
 				       'hf1:begin					       
@@ -648,23 +806,70 @@ assign io_wait_out=io_wait_in;
 				            timer1_active<=io_data_in_from_cpu[2];
 				            timer2_active<=io_data_in_from_cpu[3];
 				       end
-						 
-				       'h78: begin   //ROM overlay
-				          io_data_to_banking<=io_data_in_from_cpu[5:0];				       
-					       io_to_banking<=0;
-					    end
-						 
-				       8'b01110???: begin   //memory banking (70 to 77)
-				          io_data_to_banking<=io_data_in_from_cpu[5:0];				       
-					       io_to_banking<=0;
-					    end
+				       
+				      'h78:   begin
+								romsel<=io_data_in_from_cpu!=0;
+						end
+						'h77:   begin
+							bank7<=bank_data;
+						end
+						'h76:   begin
+							bank6<=bank_data;
+						end
+						'h75:   begin
+							bank5<=bank_data;
+						end
+						'h74:   begin
+							bank4<=bank_data;
+						end
+						'h73:   begin
+							bank3<=bank_data;
+						end
+						'h72:   begin
+							bank2<=bank_data;
+						end
+						'h71:   begin
+							bank1<=bank_data;
+						end
+						'h70:   begin
+							bank0<=bank_data;
+						end
+						
+						8'b011011??: begin  //sprite clip register range (6c to 6f)
+				          io_data_to_sprite<=io_data_in_from_cpu;
+					      io_to_sprite<=0;
+				       end
 					   
-					   8'h4a: begin  //$48 - Sprite DMA
+					   8'h53: begin          //AY DATA WRITE					      
+				            io_data_to_ay<=io_data_in_from_cpu; 
+				            io_to_ay<=0;     //ay wr active high
+				            io_reg_to_ay<=1;				            				         
+				       end
+				       
+				       8'h52: begin          //AY ADDRESS WRITE					      
+				            io_data_to_ay<=io_data_in_from_cpu; 
+				            io_to_ay<=0;     //ay wr active high
+				            io_reg_to_ay<=0;				            				         
+				       end
+					   
+					   8'h51: begin          //OPL DATA WRITE					      
+				            io_data_to_opl<=io_data_in_from_cpu; 
+				            io_to_opl<=0;     //opl wr active low
+				            io_reg_to_opl<=1;				            				         
+				       end
+				       
+				       8'h50: begin          //OPL ADDRESS WRITE					      
+				            io_data_to_opl<=io_data_in_from_cpu; 
+				            io_to_opl<=0;     //opl wr active low
+				            io_reg_to_opl<=0;				            				         
+				       end
+					   
+					   8'h4a: begin  //$4a - Sprite DMA
 					      io_data_to_DMA<=io_data_in_from_cpu;
 					      io_to_DMA<=0;
 					   end
 
-					   8'h49: begin  //$48 - Sprite DMA
+					   8'h49: begin  //$49 - Sprite DMA
 					      io_data_to_DMA<=io_data_in_from_cpu;
 					      io_to_DMA<=0;
 					   end
@@ -692,9 +897,50 @@ assign io_wait_out=io_wait_in;
 					      io_to_sdcard<=0;
 					      io_to_banking<=1;*/
 					      io_to_DMA<=0;
-					   end 
+					   end
+					   
+					   /*08'h1f: begin           //for compatibility for spectrum we will use 16 bit decoding here
+					      if (io_address_in[15:8]==8'hff) io_reg_to_ay<=io_data_in_from_cpu[3:0];  //AY REG SELECT
+				          if (io_address_in[15:8]==8'hbf)
+				          begin
+				            io_data_to_ay<=io_data_in_from_cpu;     //AY DATA WRITE
+				            io_to_ay<=0;     //ay wr active low
+				          end
+				       end*/
 				       
-				       8'b000?????: begin  //sid register range (0 to 31 $0 to $1f)
+				       
+					   
+					   08'h1c: begin  //sid register range
+				          io_data_to_sid<=io_data_in_from_cpu;
+				          io_to_sid<=1;     //sid we is active high
+				       end
+				       
+				       08'h1b: begin  //sid register range
+				          io_data_to_sid<=io_data_in_from_cpu;
+				          io_to_sid<=1;     //sid we is active high
+				       end
+				       
+				       08'h1a: begin  //sid register range
+				          io_data_to_sid<=io_data_in_from_cpu;
+				          io_to_sid<=1;     //sid we is active high
+				       end
+				       
+				       08'h19: begin  //sid register range
+				          io_data_to_sid<=io_data_in_from_cpu;
+				          io_to_sid<=1;     //sid we is active high
+				       end
+				       
+				       08'h18: begin  //sid register range
+				          io_data_to_sid<=io_data_in_from_cpu;
+				          io_to_sid<=1;     //sid we is active high
+				       end
+					   
+					   08'b00010???: begin  //sid register range (16 to 23 $10 to $17)
+				          io_data_to_sid<=io_data_in_from_cpu;
+				          io_to_sid<=1;     //sid we is active high
+				       end 
+				       
+				       08'b0000????: begin  //sid register range (0 to 15 $0 to $0f)
 				          io_data_to_sid<=io_data_in_from_cpu;
 				      /*    io_data_to_banking<=6'bZ;
 				          io_data_to_cpu<=8'bZ;
@@ -711,21 +957,9 @@ assign io_wait_out=io_wait_in;
 				          io_to_banking<=1;*/
 				       end
 				       
-				       'h20: begin  //screen register range
+				       8'b001000??: begin  //screen register range     20 to 23
 				          io_data_to_rgb<=io_data_in_from_cpu;
-				          /*io_data_to_banking<=6'bZ;
-				          io_data_to_cpu<=8'bZ;
-				          io_data_to_ram<=8'bZ;
-				          io_data_to_sid<=8'bZ;
-				          io_data_to_sdcard<=8'bZ;
-				          io_to_sid<=0;
-				          io_to_ram<=1;*/
 				          io_to_rgb<=0;
-					      /*io_to_sprite<=1;
-					      io_from_ram<=1;
-					      io_from_matrix<=0;
-					      io_to_sdcard<=0;
-					      io_to_banking<=1;*/
 				       end
 				       
 				       'h3b: begin             //Address element of i2c control (MCP23017 upper 4 bits are hardcoded)                      
@@ -853,7 +1087,7 @@ assign io_wait_out=io_wait_in;
 				            sd_data_out_latch[7:0]<=io_data_in_from_cpu;
 				            //io_data_to_sdcard[7:0]<=io_data_in_from_cpu;
 				       end
-                       'h31:begin				            
+                   'h31:begin				            
 				            io_addr_to_sdcard<=io_data_in_from_cpu[1:0];
 				       end 				       
 				       
@@ -881,7 +1115,7 @@ assign io_wait_out=io_wait_in;
 					   
 				     
 				        default: begin
-					       io_data_to_ram<=io_data_in_from_cpu;
+					        io_data_to_ram<=io_data_in_from_cpu;
 					    /*   io_data_to_banking<=6'bZ;
 					       io_data_to_cpu<=8'bZ;
 					       io_data_to_rgb<=8'bZ;
@@ -925,11 +1159,33 @@ assign io_wait_out=io_wait_in;
 					
 					'hff:begin             //interrupt status
 					   io_data_to_cpu[7:0]<=int_status;
+					   int_status_latch<=int_status ^ 8'hff;       //reverse bits ready to clear flags
+					   clear_flags_next_cycle<=7;
+					   /*snd_irq_flag<=0;
+                       tmr_irq_flag<=0;
+                       kbd_irq_flag<=0;
+                       iob_irq_flag<=0;
+                       ioa_irq_flag<=0;
+                       hsc_irq_flag<=0;
+                       ras_irq_flag<=0;
+                       vsc_irq_flag<=0;*/
 					end
 					
 					'hfe:begin             //interrupt status
 					   io_data_to_cpu[7:0]<=int_mask;
 					end
+					
+					08'hfd: begin  //AY DATA READ
+					      io_reg_to_ay<=~io_address_in[14];
+				          if (io_address_in[15:8]==8'hff) io_data_to_cpu<=io_data_in_from_ay;
+				          //io_to_ay<=1;     //sid we is active high
+				    end
+				    
+				    /*'hf4:begin             //timer flags status
+					   io_data_to_cpu[7:0]<=timer_status;
+					   timer_status<=8'h00;
+					   timer1_int<=0;
+					end*/
 					
 					 'hf1:begin
 					   io_data_to_cpu[7:0]<={7'b0000000,raster_line[8:8]};
@@ -949,7 +1205,37 @@ assign io_wait_out=io_wait_in;
 					   io_data_to_cpu[7:0]<=potx_latch;
 					 end
 					 
+					 'h7b:begin        //Internal Timer Flags
+					   io_data_to_cpu[7:0]<=timer_status;
+					   timer_status<=8'h00;
+					   timer1_int<=0;  
+					 end
+					 
+					 'h7a:begin        //GPIO Flags
+					   io_data_to_cpu[7:0]<={6'b000000,gpio_reg};
+					   timer_status<=8'h00;
+					   timer1_int<=0;  
+					 end
+					 
+					 
+					08'h53: begin  //AY DATA READ
+				          io_data_to_cpu<=io_data_in_from_ay;				          
+				          io_reg_to_ay<=1;
+				          io_to_ay<=1;                  //ay we active high
+				    end
 			
+			        08'h52: begin  //AY STATUS READ
+				          io_data_to_cpu<=io_data_in_from_ay;				          
+				          io_reg_to_ay<=0;
+				          io_to_ay<=1;                  //ay we active high
+				    end
+				    
+				    08'h50: begin  //OPL STATUS READ
+				          io_data_to_cpu<=io_data_in_from_opl;
+				          //io_to_ay<=1;     //sid we is active high
+				          io_reg_to_opl<=0;
+				          io_to_opl<=1;             //opl we active low
+				    end
 
 					
 					'h39:begin
@@ -1005,6 +1291,11 @@ assign io_wait_out=io_wait_in;
 				            //sd_data_in_latch<=io_data_in_from_sdcard;
 				        end
 				        
+				    end
+					 
+					  8'b001000??:begin
+				         io_data_to_cpu<=io_data_in_from_rgb;
+				         io_from_rgb<=0;
 				    end
 				        
 
@@ -1063,17 +1354,24 @@ assign io_wait_out=io_wait_in;
 				io_data_to_ram<=8'bZ;
 				io_data_to_rgb<=8'bZ;
 				io_data_to_sid<=8'bZ;
-				io_data_to_sdcard<=8'bZ;
-				io_data_to_banking<=6'bZ;
+				io_data_to_sdcard<=32'bZ;
+				//io_data_to_banking<=6'bZ;
 				io_data_to_DMA<=8'bZ;
+				io_data_to_ay<=8'bz;
+		      io_reg_to_ay<=0;
+		      io_data_to_opl<=8'bz;
+		      io_reg_to_opl<=0;
 				io_to_sid<=0;
 				io_to_ram<=1;
 				io_to_rgb<=1;
 				io_to_sprite<=1;
 				io_to_sdcard<=0;
-				io_to_banking<=1;
+			//	io_to_banking<=1;
 				io_to_DMA<=1;
+				io_to_ay<=1;
+				io_to_opl<=1;
 				io_from_ram<=1;
+				io_from_rgb<=1;
 				io_from_matrix<=0;      //1=active				
 				io_sdcard_we<=0;			
 				i2c_write_req<=0;
@@ -1087,36 +1385,60 @@ assign io_wait_out=io_wait_in;
 			
 			
 			
-			if (z80_int)
-			begin  //+3
-			    if ((keyb_int_in==1) && (int_ctrl==0) && (int_mask[5]) && (keyb_ctrl==0))
+		//	if (z80_int)
+	//		begin  //+3
+			    if ((keyb_int_in==1) && (int_mask[5]) && (keyb_ctrl==0))
 			    begin  //+4
-				    z80_int<=0;
-				    z80_int_timer<='h20;
-				    int_ctrl<=1;
-				    keyb_ctrl<=1;
-				    int_status<= 8'b00100000;       //set bit to indicate keyboard interrupt
-				    io_data_to_cpu<=int_data_bus;
+                    kbd_irq_flag<=1;
+                    keyb_ctrl<=1;
+                    //z80_int_timer<='h20;
 				end  //-4
 				
-				if ((timer1_int==1) && (int_ctrl==0) && (int_mask[6]) )
+				
+				if ((spr_int_in==0) && (int_mask[4]) && (spr_ctrl==0))
+			    begin  //+4				    
+                    spr_irq_flag<=1;
+                    spr_ctrl<=1;
+				end		//-4
+				
+				if ((GPIO_int_in==0) && (int_mask[3]) && (gpio_ctrl==0))
+			    begin  //+4				    
+                    ioa_irq_flag<=1;
+                    gpio_ctrl<=1;
+                    gpio_reg<=({~GPIOA_int_in,~GPIOB_int_in});
+				end		//-4
+				//else
+				//begin  //+4
+                //    kbd_irq_flag<=0;
+				//end  //-4
+				
+				if ((timer1_int==1) && (int_mask[6]) && (tmr1_ctrl==0))
+			    begin  //+4				    
+                    tmr_irq_flag<=1;           
+                    tmr1_ctrl<=1;
+				end  //-4
+				//else
+				//begin  //+4				    
+                //    tmr_irq_flag<=0;           
+				//end  //-4
+				if ((timer2_int_in==0) && (int_mask[7]) && (tmr2_ctrl==0))
+			    begin  //+4
+			        tmr2_ctrl<=1;
+				    snd_irq_flag<=1;           
+				end  //-4			
+				//else	
+				//begin  //+4
+				//    snd_irq_flag<=0;           
+				//end  //-4
+				/*if ((timer2_int_in==0) && (int_ctrl==0) && (int_mask[7]) )
 			    begin  //+4
 				    z80_int<=0;
 				    z80_int_timer<='h20;
 				    int_ctrl<=1;
-				    //tmr1_ctrl<=1;
-				    int_status<= 8'b01000000;       //set bit to indicate keyboard interrupt
+				    tmr2_ctrl<=1;
+				    int_status<= 8'b10000000;       //set bit to OPL timer interrupt
 				    io_data_to_cpu<=int_data_bus;
-				end  //-4
-				if ((timer2_int==1) && (int_ctrl==0) && (int_mask[7]) )
-			    begin  //+4
-				    z80_int<=0;
-				    z80_int_timer<='h20;
-				    int_ctrl<=1;
-				    //tmr2_ctrl<=1;
-				    int_status<= 8'b10000000;       //set bit to indicate keyboard interrupt
-				    io_data_to_cpu<=int_data_bus;
-				end  //-4
+				end  //-4*/
 /*				if ((button_int_in==1) && (int_ctrl==0) && (int_mask[7]) && (button_ctrl==0))
 			    begin //+4
 				    z80_int<=0;
@@ -1126,52 +1448,51 @@ assign io_wait_out=io_wait_in;
 				    int_status<= 8'b10000000;       //set bit to indicate button pressed interrupt
 				    io_data_to_cpu<=int_data_bus;
 				end  //-4*/
-			    if ((vsync_int_in==0) && (int_ctrl==0) && (int_mask[0]) && (vsync_ctrl==0))
-			    begin  //+4
-				    z80_int<=0;
-				    z80_int_timer<='h20;
-				    int_ctrl<=1;
-				    vsync_ctrl<=1;
-				    int_status<= 8'b00000001;       //set bit to indicate vsync interrupt
-				    io_data_to_cpu<=int_data_bus;
+			    if ((vsync_int_in==0) && (int_mask[0]) && (vsync_ctrl==0))
+			    begin  //+4				    
+                    vsc_irq_flag<=1;
+                    vsync_ctrl<=1;
 				end		//-4	   
-				if ((hsync_int_in==0) && (int_ctrl==0) && (int_mask[2:1]) && (hsync_ctrl==0) && (CounterY[0]==0))
+				//else
+				//begin  //+4				    
+                //    vsc_irq_flag<=0;
+				//end		//-4
+				if ((hsync_int_in==0) &&  (int_mask[2:1]) && (hsync_ctrl==0)) 
 			    begin  //+4
+			        hsync_ctrl<=1;
 				    case (int_mask[2:1])
 				        'h1:begin
-				            if (raster_line==raster_int)
-				            begin
-				                z80_int<=0;
-				                z80_int_timer<='h20;
-				                int_ctrl<=1;
-				                hsync_ctrl<=1;
-				                io_data_to_cpu<=int_data_bus;
-				                int_status<= 8'b00000110;
-				            end
-				            else int_status<=0;
+				            hsc_irq_flag<=0;
+				            if (raster_line==raster_int) ras_irq_flag<=1; else ras_irq_flag<=0;				            				            
 				        end
-				        'h2:begin
-				            z80_int<=0;
-				            z80_int_timer<='h20;
-				            int_ctrl<=1;
-				            hsync_ctrl<=1;
-				            io_data_to_cpu<=int_data_bus;				                
-				            int_status<= 8'b00000100;
+				        'h2:begin				    
+                            hsc_irq_flag<=1;
+                            ras_irq_flag<=0;
 				        end
-				        'h3:begin
-				            z80_int<=0;
-				            z80_int_timer<='h20;
-				            int_ctrl<=1;
-				            hsync_ctrl<=1;
-				            io_data_to_cpu<=int_data_bus;
-				            if (raster_line==raster_int) int_status<= 8'b00000110; else int_status<=8'b00000100;
+				        'h3:begin			
+				            hsc_irq_flag<=1;	            
+				            if (raster_line==raster_int) ras_irq_flag<=1; else ras_irq_flag<=0;
 				        end
 				        default: begin
-				            int_status<=0;
+				            ras_irq_flag<=0;
+				            hsc_irq_flag<=0;
 				        end
 				    endcase
 				end  //-4
-			end  //-3
+				//else
+				//begin
+				//    ras_irq_flag<=0;
+		        //    hsc_irq_flag<=0;
+				//end
+			//end  //-3
+			
+			int_status<={snd_irq_flag,tmr_irq_flag,kbd_irq_flag,spr_irq_flag,ioa_irq_flag,hsc_irq_flag,ras_irq_flag,vsc_irq_flag};
+			
+			if (int_status==8'h00) z80_int<=1; else z80_int<=0;
+		
+				/*if (z80_int)
+			begin  //+3
+			end
             else
             begin  //+3
 				
@@ -1180,16 +1501,25 @@ assign io_wait_out=io_wait_in;
 				begin  //+4
 				    z80_int<=1;
 				    int_ctrl<=0;
-				    timer1_int<=0;
-				    timer2_int<=0;
+				    timer1_int<=0;				    
 				    //int_status<= 8'b00000000;
 				    //io_data_to_cpu<=8'bZ;
 				end  //-4
 				else z80_int_timer<=z80_int_timer-1;
-			end	  //-3		
+				
+			
+				
+			end	  //-3*/
+			
+			//if (z80_int_timer>0) z80_int_timer<=z80_int_timer-1;
+					
 			if (vsync_int_in) vsync_ctrl<=0;    //reset control once out of vertical blank
 			if (hsync_int_in) hsync_ctrl<=0;    //reset control once out of horizontal blank
-			if (keyb_int_in==0) keyb_ctrl<=0;    //reset control once keyboard new char assertion is lifted
+			if (spr_int_in) spr_ctrl<=0;       //reset control once out of spr int
+			if (timer2_int_in) tmr2_ctrl<=0;    //reset control once out of sound timers
+			if (timer1_int==0) tmr1_ctrl<=0;    //reset control once out of sound timers
+			if (keyb_int_in==0) keyb_ctrl<=0;    //reset control once keyboard new char assertion is lifted or after specified time
+			if (GPIO_int_in==0) gpio_ctrl<=0;    //reset control once keyboard new char assertion is lifted or after specified time
 //			if (button_int_in==0) button_ctrl<=0;    //reset control once button is released
 	   //end  //-2
 	   

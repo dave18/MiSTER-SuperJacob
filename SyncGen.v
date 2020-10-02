@@ -2,9 +2,12 @@ module SyncGen(
     input clk,
     output vga_h_sync,
     output vga_v_sync,
+    output reg v_sync_int,
+    output reg h_sync_int,
     output reg inDisplayArea,
     output reg [9:0] CounterX,
     output reg [9:0] CounterY,
+    output wire outclk,
     output reg scanlines
     );
     
@@ -56,7 +59,7 @@ localparam VBlankE = VertPix+15;*/
 // 640 x 480 @ 25.175mhz pix clock - 60hz
 localparam HorizSize = 10'd800;
 localparam HorizPix = 10'd640;
-localparam HBlankS = HorizPix+15;
+localparam HBlankS = HorizPix+16;
 localparam HBlankE = HBlankS+96;
 localparam VertSize = 10'd524;
 localparam VertPix = 10'd480;
@@ -80,6 +83,7 @@ else
     begin
 	   CounterX <= CounterX + 1;
 	   if (CounterX==HBlankE) scanlines<=scanlines+1;
+		//if (CounterX==751) scanlines<=scanlines+1;
 	end
 
 always @(posedge clk)
@@ -87,6 +91,7 @@ if(CounterXmaxed)
 begin
     CounterY <= CounterY + 1;
     if (CounterY==VertSize-1) CounterY<=0;//523) CounterY<=0;      ;524=60hz  627=50hz  ;should change to 524 but will need to adjust other timings
+	 //if (CounterY==523) CounterY<=0;//523) CounterY<=0;      ;524=60hz  627=50hz  ;should change to 524 but will need to adjust other timings
 end
 
 reg	vga_HS, vga_VS;
@@ -97,6 +102,16 @@ begin
 	//vga_HS <= (CounterX[9:2]==8'hA3); // change this value to move the display horizontally - default A4 (656)
 	vga_HS <= ((CounterX>=HBlankS) && (CounterX<HBlankE)); // change this value to move the display horizontally - default A4 (656)
 	vga_VS <= ((CounterY>=VBlankS) && (CounterY<VBlankE)); // change this value to move the display vertically
+	
+	h_sync_int <= ~(((CounterX>=HBlankS) && (CounterX<HBlankS+15)) && (CounterY[0]==0)); 
+	v_sync_int <= ~(((CounterX>=HBlankS) && (CounterX<HBlankS+15) && (CounterY==VBlankS+1))); 
+	/*
+	vga_HS <= ((CounterX>=655-1) && (CounterX<751-1)); // change this value to move the display horizontally - default A4 (656)
+	vga_VS <= ((CounterY>=490+1) && (CounterY<492+1)); // change this value to move the display vertically	
+	
+	h_sync_int <= ~(((CounterX>=655-1) && (CounterX<655+16)) && (CounterY[0]==0)); 
+	v_sync_int <= ~(((CounterX>=655-1) && (CounterX<655+16) && (CounterY==490+2))); 
+*/
 	
 end
 
@@ -110,6 +125,12 @@ else
 	//inDisplayArea <= (CounterX<32);
 	
 
+/*always @(posedge clk)
+if(inDisplayArea==0)
+	inDisplayArea <= (CounterXmaxed) && (CounterY<480); //turn on display at start of new line is y < 480
+else
+	inDisplayArea <= !(CounterX==639); //turn off display when x pos = 639 (ie end of line) ? will turn off on next clock so effectively at 640
+*/
 	
 assign vga_h_sync = ~vga_HS;
 assign vga_v_sync = ~vga_VS;

@@ -25,7 +25,7 @@ module z80_clk_ctrl(
 	 input wire clk2,
     input wire clk_ctrl,
     input wire clk_ctrl_DMA,
-	 input wire sdram_ready,
+//	 input wire sdram_ready,
 	 input wire ram_wait,
     output reg outclk
     );
@@ -40,7 +40,8 @@ module z80_clk_ctrl(
     always @(posedge clk)
     begin
       //  speed<=speed+1;
-		if (clk_ctrl & clk_ctrl_DMA & ~ram_wait)
+		//if (clk_ctrl & clk_ctrl_DMA & ~ram_wait)
+		if (clk_ctrl & clk_ctrl_DMA & ram_wait)
 		begin
 			outclk<=clk2;
 			oldclk<=clk2;

@@ -35,10 +35,12 @@ module createRGB(
     input spr_active,
     input spr_active2,
     input io_in,
+	 input io_out,
     input [7:0] io_data_in,
     input [15:0] io_address_in,
     input foregroundmask,
     input cpuwait,
+	 output reg [7:0] io_data_out,
     output reg vga_R,
     output reg vga_G,
     output reg vga_B,
@@ -52,28 +54,36 @@ module createRGB(
     output reg vga_G3,
     output reg vga_B3,
     output wire vga_v_sync2,
-    output wire vga_h_sync2
+    output wire vga_h_sync2,
+	 output reg spr_int  //interrupt for sprite collisions
     );
     
     
 assign vga_h_sync2=vga_h_sync;
 assign vga_v_sync2=vga_v_sync;
 reg io_ack;
-reg show_scan_lines;
-reg background_enable;
-reg screen_enable;
+//reg show_scan_lines;
+//reg background_enable;
+//reg screen_enable;
+reg [7:0] screen_reg;
+reg [7:0] io_latch;
 //reg screenActive;
+reg [7:0] coll_x_lo;
+reg [7:0] coll_x_hi;
+reg [7:0] coll_y;
 
 //wire screenActive=inDisplayArea;
-wire screenActive=(screen_enable)?inDisplayArea:0;
+wire screenActive=(screen_reg[7])?inDisplayArea:0;
 /////////////////////////////////////////////////////////////////
 
 initial
 begin
     io_ack<=0;
-    show_scan_lines<=0;
-    background_enable<=1;
-    screen_enable<=1;
+    //show_scan_lines<=0;
+    //background_enable<=1;
+    //screen_enable<=1;
+    screen_reg<=8'b10000010;
+	 spr_int<=1;
 end
 
 //wire screenActive;
@@ -241,28 +251,69 @@ wire SB3_2 = spr_data2[3];
 
 always @(posedge clk)
 begin
+	 if (!vga_v_sync) spr_int<=1;            //reset sprite collision flag in vblank
+	 
     if (io_in==0)	//have we had an IO signal
 	 begin
 	   if (io_ack==0) //have we already acknowledged it?
 	   begin
             io_ack<=1;	//acknowledge it
 	        case (io_address_in[7:0])
+					'h21:	begin			//reset interrupt and flags
+	               spr_int<=1;
+	               coll_x_hi<=coll_x_hi & 8'b00000001;
+	               //coll_x_hi<=8'd0;
+	               //coll_x_lo<=8'd0;
+	               //coll_y<=8'd0;
+	            end
                 'h20:	begin			//set show scanlines flag
-					show_scan_lines<=io_data_in[0:0];
-					screen_enable<=io_data_in[7:7];
-					background_enable<=io_data_in[1:1];
+					//show_scan_lines<=io_data_in[0:0];
+				//	screen_enable<=io_data_in[7:7];
+				//	background_enable<=io_data_in[1:1];
+				    screen_reg<=io_data_in;
 				end
 			endcase
 		end
 	 end
-	 else io_ack<=0;
-end
+	 
+	if (io_out==0)
+    begin
+        if (io_ack==0) //have we already acknowledged it?
+		begin
+			io_ack<=1;	//acknowledge it
+            case (io_address_in[7:0])
+					 'h23:  begin
+                    io_latch<=coll_x_hi;
+                    io_data_out<=coll_x_hi;
+                 end
+                 'h22:  begin
+                    io_latch<=coll_x_lo;
+                    io_data_out<=coll_x_lo;
+                 end
+                'h21:  begin
+                    io_latch<=coll_y;
+                    io_data_out<=coll_y;
+                 end
+                 'h20:  begin
+                    io_latch<=screen_reg;
+                    io_data_out<=screen_reg;
+                 end		        
+		   endcase
+		end
+		
+		io_data_out[7:0]<=io_latch[7:0];
+    end
+    else io_data_out<=8'bZ;
+    
+    if ((io_in) && (io_out)) io_ack<=0;
+	 
+//end
 
 
-always @(posedge clk)
-begin
+//always @(posedge clk)
+//begin
     //screenActive<=(screen_enable)?0:inDisplayArea;
-    if (show_scan_lines)
+    if (screen_reg[0])
     begin
         if (CounterY[0:0])
         begin
@@ -282,6 +333,14 @@ begin
     	           vga_R3 <= SR3 & screenActive;
     	           vga_G3 <= SG3 & screenActive;
     	           vga_B3 <= SB3 & screenActive;
+					  
+					  if (spr_int)
+	               begin
+	                   spr_int<=0;        //if spr is active and foreground active then collision occurs
+	                   coll_x_lo<=CounterX[7:0];
+    	               coll_x_hi<={7'b0100000,CounterX[8]};
+    	               coll_y<=CounterY[7:0];
+	               end
     	       end
     	       else
     	       begin
@@ -297,6 +356,14 @@ begin
 	               if (spr_active2) vga_R3 <= SR3_2 & screenActive; else vga_R3 <= R3 & screenActive;
 	               if (spr_active2) vga_G3 <= SG3_2 & screenActive; else vga_G3 <= G3 & screenActive;
 	               if (spr_active2) vga_B3 <= SB3_2 & screenActive; else vga_B3 <= B3 & screenActive;
+						
+						if (spr_active2 & spr_int)
+	               begin
+	                   spr_int<=0;        //if spr is active and foreground active then collision occurs
+	                   coll_x_lo<=CounterX[7:0];
+    	               coll_x_hi<={7'b0010000,CounterX[8]};
+    	               coll_y<=CounterY[7:0];
+	               end
 	           end	       
 	       end
 	       else
@@ -313,6 +380,14 @@ begin
 	           if (spr_active) vga_R3 <= SR3 & screenActive; else vga_R3 <= R3_2 & screenActive;
 	           if (spr_active) vga_G3 <= SG3 & screenActive; else vga_G3 <= G3_2 & screenActive;
 	           if (spr_active) vga_B3 <= SB3 & screenActive; else vga_B3 <= B3_2 & screenActive;
+				  
+				  if (spr_active & spr_int)
+	           begin
+	               spr_int<=0;        //if spr is active and foreground active then collision occurs
+	               coll_x_lo<=CounterX[7:0];
+	               coll_x_hi<={7'b1000000,CounterX[8]};
+	               coll_y<=CounterY[7:0];
+	            end
 	        end
 	    end
 	    else

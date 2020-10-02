@@ -146,7 +146,7 @@ module sprite_gen(
 //    reg flipxtemp;
 //    reg flipytemp;
     
-    reg [1:0] ByteDelay;
+    reg [2:0] ByteDelay;
     reg [4:0] spritestage;
     reg [7:0] sprite_write_address;
     reg [7:0] spritexoffset;
@@ -156,6 +156,13 @@ module sprite_gen(
     reg scanlines;
     reg io_ack;
     reg [7:0] maskbyte;
+	 
+//	 reg [10:0] ByteCounter;
+    
+    reg [8:0] clip_l;
+    reg [8:0] clip_r;
+    reg [7:0] clip_t;
+    reg [7:0] clip_b;
     
 //    integer i;
     
@@ -326,9 +333,15 @@ module sprite_gen(
         spr_we<=0;
         spr_pal_we<=0;
         spr_pal_we2<=0;
+        spr_attr_we<=0;
         maskbyte<='he3;
         spritexoffset<=0;
         spriteyoffset<=0;
+        clip_l<=9'd0;
+        clip_r<=9'd320;
+        clip_t<=8'd0;
+        clip_b<=8'd240;
+
 //        scanlines<=1;
     end
     
@@ -340,11 +353,16 @@ module sprite_gen(
         spr_we<=0;
         spr_pal_we<=0;
         spr_pal_we2<=0;
+        spr_attr_we<=0;
         maskbyte<='he3;
         //for (i=0;i<128;i=i+1) visible[i]<=0;
         spritexoffset<=0;
         spriteyoffset<=0;
-    end
+        clip_l<=9'd0;
+        clip_r<=9'd320;
+        clip_t<=8'd0;
+        clip_b<=8'd240;
+	  end
     else begin
         if (spr_pal_we) spr_pal_we<=0;          //toggle write enable back off after palette write
         if (spr_pal_we2) spr_pal_we2<=0;          //toggle write enable back off after palette write
@@ -651,6 +669,18 @@ module sprite_gen(
 				    spr_pal_we<=io_data_in[0];  //write entry
 				    spr_pal_we2<=io_data_in[1];  //write entry
 				end
+				'h6f: begin
+				    clip_l[8:1]<=io_data_in[7:0];
+				end
+				'h6e: begin
+				    clip_r[8:1]<=io_data_in[7:0];
+				end
+				'h6d: begin
+				    clip_t<=io_data_in;
+				end
+				'h6c: begin
+				    clip_b<=io_data_in;
+				end
 		  endcase
 		  end
 	    end
@@ -708,7 +738,7 @@ module sprite_gen(
                 // linkage<=0;  //no linking for first sprite!
                 
                 //if (CounterY<480) SpriteRead<=1;
-                line_counter<=CounterY<522?CounterY[9:1]+1:261-CounterY[9:1];
+                line_counter<=CounterY<522?CounterY[9:1]+1+spriteyoffset:261-CounterY[9:1]+spriteyoffset;
              end
         end
     end
@@ -720,13 +750,13 @@ module sprite_gen(
             begin
                 ByteDelay<=0;
                 ByteRead<=1;
-                
+  //              ByteCounter<=0;
                 //clear_write_address<=0;
                 scanlines<=~scanlines;//+1;
-                line_store2_read<=1;
+                line_store2_read<=0;
                 line_store2_write<=0;
                 
-                line_store2_read2<=1;
+                line_store2_read2<=0;
                 line_store2_write2<=0;
            
                 
@@ -771,7 +801,7 @@ module sprite_gen(
                     linetemp<=(line_counter-spritey) & 1;
                     
                     //if ((line_counter>=0) && (line_counter<16)) //should sprite show on this line? 50, 50+16
-                    if ((line_counter>=spritey) && (line_counter<spritey+16)) //should sprite show on this line? 50, 50+16
+                    if ((line_counter>=spritey) && (line_counter<spritey+16) && (line_counter>=clip_t) && (line_counter<=clip_b)) //should sprite show on this line? 50, 50+16
                     begin
                         if (visible) spriteon<=1; else spriteon<=0;
                         //if (flipy[spriteptr]) spr_address_read<=15-((CounterY[9:1])-spritey[spriteptr])+(pattern[spriteptr]*16); else spr_address_read<=(CounterY[9:1])-spritey[spriteptr]+(pattern[spriteptr]*16);
@@ -924,7 +954,7 @@ module sprite_gen(
                     offsettemp_2<=paloffset_2;
                     spritemodetemp_2<=spritemode_2;
                     linetemp_2<=(line_counter-spritey_2) & 1;
-                    if ((line_counter>=spritey_2) && (line_counter<spritey_2+16)) //should sprite show on this line? 50, 50+16
+                    if ((line_counter>=spritey_2) && (line_counter<spritey_2+16) && (line_counter>=clip_t) && (line_counter<=clip_b)) //should sprite show on this line? 50, 50+16
                     begin
                        if (visible_2) spriteon_2<=1; else spriteon_2<=0;
                        //spriteon_2<=1;
@@ -2861,7 +2891,7 @@ module sprite_gen(
                     
                 end
                 
-                if (ByteDelay==1)
+                if (ByteDelay==2)
                 begin
                     line_store2_we<=0;    
                     line_store2_we2<=0;
@@ -2874,7 +2904,7 @@ module sprite_gen(
                     end
                     
                 end
-                if (ByteDelay==2)
+                if (ByteDelay==4)
                 begin
                     
                     line_store2_read<=line_store2_read+1;
@@ -2895,12 +2925,17 @@ module sprite_gen(
                     end
                     //if (spr_pal_address_read==maskbyte) spr_active<=0; else spr_active<=1;
                 end
-                if (ByteDelay==3)
+                if (ByteDelay==6)
                 begin
+	//					  ByteCounter<=ByteCounter+1;
                     spr_vid_out<=spr_pal_in[11:0];   //get indexed colour from palette
                     spr_vid_out2<=spr_pal_in2[11:0];   //get indexed colour from palette
-                    if (spr_pal_address_read==maskbyte) spr_active<=0; else spr_active<=1;
-                    if (spr_pal_address_read2==maskbyte) spr_active2<=0; else spr_active2<=1;
+                    //if (spr_pal_address_read==maskbyte) spr_active<=0; else spr_active<=1;
+                    //if (spr_pal_address_read2==maskbyte) spr_active2<=0; else spr_active2<=1;
+						  //if ((spr_pal_address_read==maskbyte) || (ByteCounter<clip_l) || (ByteCounter>clip_r)) spr_active<=0; else spr_active<=1;
+                    //if ((spr_pal_address_read2==maskbyte) || (ByteCounter<clip_l) || (ByteCounter>clip_r)) spr_active2<=0; else spr_active2<=1;
+						  if ((spr_pal_address_read==maskbyte) || (CounterX[9:1]<clip_l) || (CounterX[9:1]>clip_r)) spr_active<=0; else spr_active<=1;
+                    if ((spr_pal_address_read2==maskbyte) || (CounterX[9:1]<clip_l) || (CounterX[9:1]>clip_r)) spr_active2<=0; else spr_active2<=1;
                     //if (spr_pal_address_read==maskbyte) spr_active<=0; else spr_active<=1;
                     if (scanlines==1)
                     begin

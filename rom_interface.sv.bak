@@ -213,7 +213,7 @@ module rom_interface(
     end
 	  
 	//always @ (posedge clk)
-	always_comb begin
+always_comb begin
       if ((nmi_in==0) && (m1==0)) romsel<=1;
        
 	   if (dma_assert)

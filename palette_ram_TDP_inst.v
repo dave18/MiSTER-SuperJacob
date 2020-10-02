@@ -1,4 +1,4 @@
-blk_mem_tilemap	blk_mem_tilemap_inst (
+palette_ram_TDP	palette_ram_TDP_inst (
 	.address_a ( address_a_sig ),
 	.address_b ( address_b_sig ),
 	.clock ( clock_sig ),
