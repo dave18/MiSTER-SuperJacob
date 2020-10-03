@@ -126,8 +126,13 @@ module emu
 );
 
 assign USER_OUT = '1;
+
+
+
 assign VGA_F1 = 0;
-assign VGA_SL = 0;
+assign VGA_SL = scale ? scale - 1'd1 : 2'd0;
+//assign VGA_SL = 0;
+
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 //assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = 0;
@@ -142,6 +147,8 @@ assign BUTTONS   = 0;
 
 assign VIDEO_ARX = 8'd4;//status[5:4] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = 8'd3;//status[5:4] ? 8'd9  : 8'd3;
+
+wire [1:0] scale = status[3:2];
 
 /*localparam ARCH_ZX48  = 5'b011_00; // ZX 48
 localparam ARCH_ZX128 = 5'b000_01; // ZX 128/+2
@@ -161,6 +168,7 @@ localparam CONF_STR =
 	"-;",
 	"S0,VHD,Mount Virtual SD Card;",
 	"-;",
+	"O23,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
 	"O56,Memory Size,512K,1024K,2048K;",
 	"-;",
 	"R0,Reset;",
@@ -189,6 +197,9 @@ wire        img_readonly;
 wire [63:0] img_size;
 wire        sd_ack_conf;
 
+wire        forced_scandoubler;
+wire [21:0] gamma_bus;
+
 //wire  [1:0] sdram_sz;
 
 hps_io #(.STRLEN(($size(CONF_STR))>>3), .PS2DIV(4000), .PS2WE(0)) hps_io
@@ -207,6 +218,9 @@ hps_io #(.STRLEN(($size(CONF_STR))>>3), .PS2DIV(4000), .PS2WE(0)) hps_io
 	//.ps2_kbd_data_out(ps2_kbd_data_out),
 	//.ps2_kbd_clk_in(ps2_kbd_clk_in),
 	//.ps2_kbd_data_in(ps2_kbd_data_in),
+	
+	.forced_scandoubler(forced_scandoubler),
+	.gamma_bus(gamma_bus),
 
 	.ps2_key(ps2_key),
 	.ps2_kbd_led_use(0),
@@ -275,8 +289,8 @@ sjpll sjpll_inst
 );*/
 
 
-assign CLK_VIDEO = clk_out1;
-assign CE_PIXEL=1;
+//assign CLK_VIDEO = clk_out1;
+//assign CE_PIXEL=1;
 
 ////////////////////// IO INTERFACE ////////////////////
 
@@ -1443,6 +1457,8 @@ wire SyncGen_0_inDisplayArea;
 wire [9:0] SyncGen_0_CounterX;
 wire [9:0] SyncGen_0_CounterY;
 wire SyncGen_0_scanlines;
+wire my_h_blank;
+wire my_v_blank;
 
 SyncGen SyncGen_0 (
     .clk(clk_out1),
@@ -1453,7 +1469,9 @@ SyncGen SyncGen_0 (
     .inDisplayArea(SyncGen_0_inDisplayArea),
     .CounterX(SyncGen_0_CounterX),
     .CounterY(SyncGen_0_CounterY),
-    .scanlines(SyncGen_0_scanlines)
+    .scanlines(SyncGen_0_scanlines),
+	 .h_blank(my_h_blank),
+	 .v_blank(my_v_blank)
 );
 
 ////////////////////// CREATE RGB /////////////////////
@@ -1514,10 +1532,43 @@ createRGB createRGB_0 (
 	.vga_h_sync2(createRGB_0_vga_h_sync2),
 	.spr_int(spr_int)
 	);
+	
+	
+assign CLK_VIDEO = clk_sys;
+video_mixer #(768, 1, 1) mixer
+(
+	.clk_vid(CLK_VIDEO),
+	
+	.ce_pix(clk_out1),
+	.ce_pix_out(CE_PIXEL),
+
+	.hq2x(scale == 1),
+	.scanlines(0),
+	.scandoubler(scale || forced_scandoubler),
+	.gamma_bus(gamma_bus),
+
+	.R({R3,R2,R1,R}),
+	.G({G3,G2,G1,G}),
+	.B({B3,B2,B1,B}),
+
+	.mono(0),
+
+	.HSync(~createRGB_0_vga_h_sync2),
+	.VSync(~createRGB_0_vga_v_sync2),
+	.HBlank(my_h_blank),
+	.VBlank(my_v_blank),
+
+	.VGA_R(VGA_R),
+	.VGA_G(VGA_G),
+	.VGA_B(VGA_B),
+	.VGA_VS(VGA_VS),
+	.VGA_HS(VGA_HS),
+	.VGA_DE(VGA_DE)
+);
 	 
-assign VGA_HS = ~createRGB_0_vga_h_sync2;		//postive h-sync
-assign VGA_VS = ~createRGB_0_vga_v_sync2;		//positive v-sync
-assign VGA_DE = SyncGen_0_inDisplayArea;//~(VGA_HS | VGA_VS);
+//assign VGA_HS = ~createRGB_0_vga_h_sync2;		//postive h-sync
+//assign VGA_VS = ~createRGB_0_vga_v_sync2;		//positive v-sync
+//assign VGA_DE = SyncGen_0_inDisplayArea;//~(VGA_HS | VGA_VS);
 
 /*assign VGA_R  = {R3,R3,R2,R2,R1,R1,R,R};
 assign VGA_G  = {G3,G3,G2,G2,G1,G1,G,G};
@@ -1527,16 +1578,18 @@ assign VGA_B  = {B3,B3,B2,B2,B1,B1,B,B};*/
 assign VGA_G  = {G3,G2,G1,G,G,G,G,G};
 assign VGA_B  = {B3,B2,B1,B,B,B,B,B};*/
 
-assign VGA_R  = {R3,R2,R1,R,4'b0000};
-assign VGA_G  = {G3,G2,G1,G,4'b0000};
-assign VGA_B  = {B3,B2,B1,B,4'b0000};
+//assign VGA_R  = {R3,R2,R1,R,4'b0000};
+//assign VGA_G  = {G3,G2,G1,G,4'b0000};
+//assign VGA_B  = {B3,B2,B1,B,4'b0000};
 
 
 // **** USE MiSTER ADC to replicate SJ ADC channels ****
 
-wire [23:0] adc_data;
+
 reg [7:0] adc_1;
 reg [7:0] adc_2;
+
+wire [23:0] adc_data;
 wire adc_sync;
 ltc2308 ltc2308_ADC
 (

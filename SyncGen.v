@@ -4,6 +4,8 @@ module SyncGen(
     output vga_v_sync,
     output reg v_sync_int,
     output reg h_sync_int,
+	 output reg h_blank,
+	 output reg v_blank,
     output reg inDisplayArea,
     output reg [9:0] CounterX,
     output reg [9:0] CounterY,
@@ -117,6 +119,8 @@ end
 
 //reg inDisplayArea;
 always @(posedge clk)
+begin
+
 if(inDisplayArea==0)
 	//inDisplayArea <= ((CounterXmaxed) && ((CounterY<VertPix-1) || (CounterY==VertSize-1))); //turn on display at start of new line is y < 480
 	inDisplayArea <= (CounterXmaxed) && (CounterY<VertPix); //turn on display at start of new line is y < 480
@@ -124,6 +128,9 @@ else
 	inDisplayArea <= !(CounterX==HorizPix-1); //turn off display when x pos = 639 (ie end of line) ? will turn off on next clock so effectively at 640
 	//inDisplayArea <= (CounterX<32);
 	
+	v_blank<=(CounterY>=VertPix);
+	h_blank<=(CounterX>=HorizPix);
+end	
 
 /*always @(posedge clk)
 if(inDisplayArea==0)
