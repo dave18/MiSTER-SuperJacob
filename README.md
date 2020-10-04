@@ -3,7 +3,7 @@ My SuperJacob core ported to MiSTER
 
 This is a port of a computer I designed while learning to program FPGAs.  Apologies for the state of the code, this was a learning experiment and started off with me just wanted to generate a VGA output.  Then I started playing and adding bits until it developed into a working and usable computer.  Because of this, there is no consistency to the code or the general structure as I was learning new ways of doing things all the time.
 
-Most things have ported across ok, however the main issue I have is that I cannot get the SDRAM interface working so I'm limited to 256k of memory (using internal RAM) whereas the original used 512K.  There is also a small bug with the SD Card interface, sometimes it fails to initialise after a reset, but another reset usually fixes it.  This doesn't happen on real hardware so I'm not sure what is causing it.
+Most things have ported across ok, however there is a small bug with the SD Card interface, sometimes it fails to initialise after a reset, but another reset usually fixes it.  This doesn't happen on real hardware so I'm not sure what is causing it.
 
 
 The original core is based on a CMOD-A7 FPGA board which uses an Artix-7 15T.
@@ -12,7 +12,7 @@ The original core is based on a CMOD-A7 FPGA board which uses an Artix-7 15T.
 The machine
 
 
-Z80 CPU running at 242mhz (uses T80 core), with dedicated 512k (up to 2048k on MiSTER port) memory, bankable in 8k slots.
+Z80 CPU running at 24mhz (uses T80 core), with dedicated 512k (up to 2048k on MiSTER port) memory, bankable in 8k slots.
 
 
 4 display modes
